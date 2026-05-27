@@ -19,6 +19,13 @@ func TestWriteJSONAtomic(t *testing.T) {
 	if info.Size() == 0 {
 		t.Fatal("expected non-empty file")
 	}
+	var decoded map[string]string
+	if err := ReadJSON(path, &decoded); err != nil {
+		t.Fatalf("read json: %v", err)
+	}
+	if decoded["status"] != "ok" {
+		t.Fatalf("decoded status = %q, want ok", decoded["status"])
+	}
 }
 
 func TestAppendJSONL(t *testing.T) {
@@ -35,5 +42,12 @@ func TestAppendJSONL(t *testing.T) {
 	}
 	if len(data) == 0 {
 		t.Fatal("expected jsonl content")
+	}
+	count, err := CountJSONLLines(path)
+	if err != nil {
+		t.Fatalf("count jsonl: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("jsonl lines = %d, want 2", count)
 	}
 }

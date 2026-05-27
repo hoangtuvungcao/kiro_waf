@@ -15,6 +15,50 @@ type Result struct {
 	Plan string
 }
 
+type RuntimeConfig struct {
+	SourceKind   Kind
+	Mode         string
+	Plan         string
+	AdminCIDRs   []string
+	Interface    string
+	SSHPort      int
+	Cloudflare   bool
+	TLSMode      string
+	BackendPools []RuntimeBackendPool
+	Sites        []RuntimeSite
+	Protection   RuntimeProtection
+}
+
+type RuntimeBackendPool struct {
+	ID        string
+	Upstreams []RuntimeUpstream
+}
+
+type RuntimeUpstream struct {
+	ID  string
+	URL string
+}
+
+type RuntimeSite struct {
+	ID                 string
+	Domains            []string
+	DefaultBackendPool string
+	Routes             []RuntimeRoute
+}
+
+type RuntimeRoute struct {
+	Path        string
+	BackendPool string
+	Protection  string
+}
+
+type RuntimeProtection struct {
+	Profile        string
+	WAF            bool
+	Bot            bool
+	AutoAttackMode bool
+}
+
 type TenantConfig struct {
 	Mode       string           `yaml:"mode"`
 	Plan       string           `yaml:"plan"`

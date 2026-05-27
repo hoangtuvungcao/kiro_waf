@@ -107,9 +107,16 @@ func validateTenantWebsite(site TenantWebsite) error {
 	if len(site.Sites) == 0 {
 		return errors.New("website.sites must contain at least one site")
 	}
+	domains := map[string]int{}
 	for i, s := range site.Sites {
 		if len(s.Domains) == 0 {
 			return fmt.Errorf("website.sites[%d].domains must not be empty", i)
+		}
+		for _, domain := range s.Domains {
+			if prev, ok := domains[domain]; ok {
+				return fmt.Errorf("duplicate domain %q in website.sites[%d] and website.sites[%d]", domain, prev, i)
+			}
+			domains[domain] = i
 		}
 		if err := validateBackendURL(s.Backend); err != nil {
 			return fmt.Errorf("website.sites[%d].backend: %w", i, err)
@@ -151,16 +158,28 @@ func ValidateAdvanced(cfg AdvancedConfig) error {
 		if len(pool.Upstreams) == 0 {
 			return fmt.Errorf("backend pool %q must have upstreams", pool.ID)
 		}
+		for _, upstream := range pool.Upstreams {
+			if err := validateBackendURL(upstream.URL); err != nil {
+				return fmt.Errorf("backend pool %q upstream %q: %w", pool.ID, upstream.ID, err)
+			}
+		}
 	}
 	if cfg.Mode == "full" && len(cfg.Sites) == 0 {
 		return errors.New("sites must not be empty in full mode")
 	}
+	domains := map[string]string{}
 	for _, site := range cfg.Sites {
 		if strings.TrimSpace(site.ID) == "" {
 			return errors.New("site id is required")
 		}
 		if len(site.Domains) == 0 {
 			return fmt.Errorf("site %q must have domains", site.ID)
+		}
+		for _, domain := range site.Domains {
+			if prev, ok := domains[domain]; ok {
+				return fmt.Errorf("duplicate domain %q in sites %q and %q", domain, prev, site.ID)
+			}
+			domains[domain] = site.ID
 		}
 		if !pools[site.DefaultBackendPool] {
 			return fmt.Errorf("site %q references unknown default backend pool %q", site.ID, site.DefaultBackendPool)
