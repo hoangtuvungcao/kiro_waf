@@ -1,0 +1,27 @@
+# Example AppArmor profile outline. Test before enforcing.
+
+#include <tunables/global>
+
+profile kiro-nginx /usr/sbin/nginx flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+  capability net_bind_service,
+  capability setgid,
+  capability setuid,
+
+  /usr/sbin/nginx r,
+  /etc/nginx/** r,
+  /var/log/nginx/** rw,
+  /var/cache/nginx/** rw,
+  /run/nginx.pid rw,
+
+  /var/www/** r,
+
+  deny /bin/bash x,
+  deny /bin/sh x,
+  deny /usr/bin/curl x,
+  deny /usr/bin/wget x,
+  deny /usr/bin/nc x,
+}
+

@@ -1,0 +1,40 @@
+# Cấu hình cho người thuê cần mã hóa Cloudflare -> origin bằng Full Strict.
+# Dùng khi website có login, dữ liệu nhạy cảm, hồ sơ học sinh/nhân sự, thanh toán.
+
+mode: full
+plan: professional
+license_key: KIRO-XXXX-XXXX
+
+admin:
+  allow_ips:
+    - 203.0.113.10/32
+
+server:
+  interface: eth0
+  ssh_port: 22
+
+website:
+  enabled: true
+  cloudflare: true
+  tls_mode: full_strict
+  cert_file: /etc/kiro/certs/example.com.pem
+  key_file: /etc/kiro/certs/example.com.key
+
+  sites:
+    - domains:
+        - example.com
+        - www.example.com
+      backend: http://127.0.0.1:3000
+
+protection:
+  profile: strict
+  waf: true
+  bot: true
+  auto_attack_mode: true
+
+updates:
+  auto_security_updates: true
+
+telemetry:
+  enabled: false
+

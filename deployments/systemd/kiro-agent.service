@@ -1,0 +1,20 @@
+[Unit]
+Description=kiro_waf agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/kiro-agent --config /etc/kiro/kiro.yaml
+Restart=always
+RestartSec=3
+User=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ReadWritePaths=/etc/kiro /var/lib/kiro /var/log/kiro /run/kiro
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+

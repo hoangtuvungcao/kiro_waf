@@ -1,0 +1,47 @@
+baseline:
+  enabled: true
+  learning_days: 7
+  min_samples: 1000
+
+hysteresis:
+  enabled: true
+  min_level_hold_seconds: 120
+  cooldown_seconds: 600
+  require_recovery_samples: 5
+
+levels:
+  normal:
+    description: Baseline.
+
+  elevated:
+    triggers:
+      cpu_percent: 75
+      ram_available_percent: 20
+      conntrack_percent: 60
+      backend_latency_ms: 800
+    actions:
+      tighten_rate_limits: true
+      challenge_new_clients: true
+      increase_cache_seconds: 5
+
+  attack:
+    triggers:
+      cpu_percent: 85
+      ram_available_percent: 15
+      conntrack_percent: 75
+      backend_latency_ms: 1500
+    actions:
+      temporary_block_bad_clients: true
+      disable_expensive_routes: true
+      lower_proxy_timeouts: true
+      return_429_or_503_early: true
+
+  lockdown:
+    triggers:
+      cpu_percent: 95
+      ram_available_percent: 8
+      conntrack_percent: 90
+      backend_latency_ms: 3000
+    actions:
+      allow_admin_and_known_clients_only: true
+      protect_backend_first: true

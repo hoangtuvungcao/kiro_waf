@@ -1,0 +1,50 @@
+# Cấu hình tối giản cho server khách hàng/người thuê.
+# File này đủ cho 80-90% trường học, SME, website nhỏ.
+
+mode: full # server hoặc full
+plan: school_smb
+license_key: KIRO-XXXX-XXXX
+
+admin:
+  # IP quản trị được phép SSH. Không để 0.0.0.0/0 trong production.
+  allow_ips:
+    - 203.0.113.10/32
+
+server:
+  interface: eth0
+  ssh_port: 22
+
+website:
+  enabled: true
+  cloudflare: true
+  # flexible_http: không cần cert/key ở server, origin chạy HTTP port 80.
+  # full_strict: cần cert/key, bảo mật hơn cho site có dữ liệu nhạy cảm.
+  tls_mode: flexible_http
+
+  sites:
+    - domains:
+        - example.com
+        - www.example.com
+      backend: http://127.0.0.1:3000
+
+      # Tùy chọn. Xóa cả khối routes nếu website chỉ có một backend.
+      routes:
+        - path: /api/
+          backend: http://127.0.0.1:4000
+        - path: /login
+          backend: http://127.0.0.1:4000
+          protection: strict
+
+protection:
+  profile: balanced # light, balanced, strict, lockdown
+  waf: true
+  bot: true
+  auto_attack_mode: true
+
+updates:
+  auto_security_updates: true
+
+telemetry:
+  # Mặc định tắt gửi dữ liệu về provider. Khi cần bảo hành có thể bật health report.
+  enabled: false
+

@@ -1,0 +1,276 @@
+# Cấu hình chính của kiro_waf.
+# MVP dùng file YAML/JSON/JSONL, không dùng SQL.
+
+mode: full # server hoặc full
+deployment_profile: school_smb # community, school_smb, professional, enterprise_lite
+node_role: protected_server # protected_server, không phải provider_license_server
+
+paths:
+  state_dir: /var/lib/kiro
+  log_dir: /var/log/kiro
+  run_dir: /run/kiro
+  last_good_config_dir: /var/lib/kiro/last-good-config
+
+safety:
+  dry_run_before_apply: true
+  require_admin_ip_before_firewall_apply: true
+  rollback_timer_seconds: 60
+  keep_last_good_configs: 5
+  never_block_admin_ips: true
+  require_local_console_warning: true
+
+license:
+  file: /etc/kiro/license.json
+  provider_public_key: /etc/kiro/provider-public-key.pem
+  require_valid_license: true
+  allow_grace_period: true
+
+server_identity:
+  use_machine_id: true
+  use_primary_mac: true
+  use_all_macs_hash: true
+  fingerprint_salt_id: default-provider-key-2026
+
+server_protection:
+  enabled: true
+  interfaces:
+    - eth0
+  xdp:
+    enabled: true
+    mode: native # native, generic, offload
+    drop_private_source_ip: true
+    drop_malformed: true
+    allowlist_file: /etc/kiro/allowlist.txt
+    blocklist_file: /etc/kiro/blocklist.txt
+  ddos:
+    per_ip_pps: 3000
+    per_subnet24_pps: 30000
+    syn_per_ip_per_second: 200
+    udp_per_ip_per_second: 500
+    icmp_per_ip_per_second: 30
+    temporary_block_seconds: 900
+    greylist_seconds: 300
+  nftables:
+    enabled: true
+    protect_conntrack: true
+    allow_ports:
+      - 22
+      - 80
+      - 443
+    ssh_admin_only: true
+    admin_ips:
+      - 203.0.113.10/32
+
+website_protection:
+  enabled: true
+  reverse_proxy: nginx
+  cloudflare:
+    enabled: true
+    plan: free
+    require_proxied_traffic: true
+    block_direct_origin_http: true
+    update_ip_ranges: true
+    restore_real_ip_header: CF-Connecting-IP
+    ips_v4_file: rules/cloudflare/ips-v4.txt
+    ips_v6_file: rules/cloudflare/ips-v6.txt
+  tls:
+    # flexible_http: Cloudflare HTTPS edge -> origin HTTP:80. Dễ setup, không cần cert/key ở server.
+    # full_tls: Cloudflare HTTPS edge -> origin HTTPS:443, có cert nhưng Cloudflare không strict verify.
+    # full_strict: Cloudflare HTTPS edge -> origin HTTPS:443, cert hợp lệ hoặc Cloudflare Origin CA.
+    origin_mode: flexible_http
+    origin_http_port: 80
+    origin_https_port: 443
+    redirect_http_to_https_at_origin: false
+    certificate_file: ""
+    private_key_file: ""
+    cloudflare_origin_ca: false
+  waf:
+    enabled: true
+    engine: coraza # coraza hoặc modsecurity
+    owasp_crs: true
+    anomaly_threshold: 5
+  bot:
+    enabled: true
+    cookie_challenge: true
+    js_challenge: true
+    proof_of_work: false
+    score_challenge: 50
+    score_block: 80
+  admission:
+    enabled: true
+    overload_returns: 503
+    default_rpm_per_ip: 120
+    default_concurrent_per_ip: 10
+
+# backend_pools tách backend khỏi domain để hỗ trợ:
+# - 1 domain -> nhiều backend
+# - nhiều domain -> 1 backend
+# - 1 domain -> nhiều path -> nhiều backend khác nhau
+backend_pools:
+  - id: frontend_pool
+    load_balancing: round_robin # round_robin, least_conn, ip_hash
+    health_check:
+      enabled: true
+      path: /health
+      interval_seconds: 10
+      fail_after: 3
+    upstreams:
+      - id: frontend_1
+        url: http://127.0.0.1:3000
+        weight: 1
+      - id: frontend_2
+        url: http://127.0.0.1:3001
+        weight: 1
+
+  - id: api_pool
+    load_balancing: least_conn
+    upstreams:
+      - id: api_1
+        url: http://127.0.0.1:4000
+        weight: 1
+
+policies:
+  - id: default_web_policy
+    waf: true
+    bot: true
+    default_rpm_per_ip: 120
+    default_concurrent_per_ip: 10
+    cache_static_assets: true
+
+sites:
+  - id: main_site
+    domains:
+      - example.com
+      - www.example.com
+    tls:
+      origin_mode: flexible_http
+      origin_http_port: 80
+      certificate_file: ""
+      private_key_file: ""
+    policy: default_web_policy
+    default_backend_pool: frontend_pool
+    routes:
+      - path: /
+        backend_pool: frontend_pool
+        rpm_per_ip: 120
+        cache_seconds: 5
+      - path: /login
+        backend_pool: api_pool
+        rpm_per_ip: 10
+        rpm_per_account: 5
+        challenge_score: 50
+      - path: /api/
+        backend_pool: api_pool
+        rpm_per_ip: 60
+        max_concurrent_per_ip: 3
+      - path: /api/search
+        backend_pool: api_pool
+        rpm_per_ip: 30
+        max_concurrent_per_ip: 2
+        cache_seconds: 10
+      - path: /api/export
+        backend_pool: api_pool
+        require_auth: true
+        rpm_per_user: 2
+        max_concurrent_global: 1
+      - path: /upload
+        backend_pool: api_pool
+        rpm_per_ip: 5
+        max_body_mb: 10
+
+  # Ví dụ nhiều domain dùng chung một backend pool.
+  - id: shared_backend_site
+    domains:
+      - brand-a.example.net
+      - brand-b.example.net
+    tls:
+      origin_mode: flexible_http
+      origin_http_port: 80
+      certificate_file: ""
+      private_key_file: ""
+    policy: default_web_policy
+    default_backend_pool: frontend_pool
+
+resource_governor:
+  enabled: true
+  baseline:
+    enabled: true
+    learning_days: 7
+    min_samples: 1000
+    store_file: /var/lib/kiro/baseline/baseline.json
+  hysteresis:
+    enabled: true
+    min_level_hold_seconds: 120
+    cooldown_seconds: 600
+    require_recovery_samples: 5
+  levels:
+    elevated:
+      cpu_percent: 75
+      ram_available_percent: 20
+      conntrack_percent: 60
+      backend_latency_ms: 800
+    attack:
+      cpu_percent: 85
+      ram_available_percent: 15
+      conntrack_percent: 75
+      backend_latency_ms: 1500
+    lockdown:
+      cpu_percent: 95
+      ram_available_percent: 8
+      conntrack_percent: 90
+      backend_latency_ms: 3000
+  actions:
+    elevated:
+      tighten_rate_limits: true
+      enable_challenge_for_new_clients: true
+      increase_cache: true
+    attack:
+      temporary_block_bad_clients: true
+      disable_expensive_routes: true
+      lower_timeouts: true
+    lockdown:
+      allow_admin_and_known_clients_only: true
+      protect_backend_first: true
+
+runtime_security:
+  enabled: true
+  audit_process_exec: true
+  file_integrity:
+    enabled: true
+    paths:
+      - /var/www
+      - /etc/nginx
+      - /etc/kiro
+  alert_when_web_user_executes:
+    - sh
+    - bash
+    - curl
+    - wget
+    - nc
+    - python
+    - perl
+
+updates:
+  enabled: true
+  channel: stable
+  manifest_url: https://provider.example.com/updates/stable/manifest.json
+  require_signed_manifest: true
+  auto_rollback_on_health_failure: true
+
+telemetry:
+  enabled: false
+  health_report:
+    enabled: true
+    send_interval_seconds: 3600
+  privacy:
+    send_request_body: false
+    send_cookie: false
+    send_authorization_header: false
+    send_raw_client_ip: false
+    hash_client_ip: true
+    redact_secrets: true
+
+logging:
+  level: info
+  directory: /var/log/kiro
+  rate_limit_per_second: 100

@@ -1,0 +1,66 @@
+# Ví dụ mapping domain/backend.
+
+backend_pools:
+  # 1 domain -> nhiều backend.
+  - id: main_app_pool
+    load_balancing: round_robin
+    upstreams:
+      - id: app_1
+        url: http://127.0.0.1:3000
+        weight: 1
+      - id: app_2
+        url: http://127.0.0.1:3001
+        weight: 1
+
+  # Backend API dùng riêng cho các route /api và /login.
+  - id: api_pool
+    load_balancing: least_conn
+    upstreams:
+      - id: api_1
+        url: http://127.0.0.1:4000
+        weight: 1
+
+  # Nhiều domain -> một backend.
+  - id: shared_app_pool
+    upstreams:
+      - id: shared_app
+        url: http://127.0.0.1:5000
+
+sites:
+  - id: one_domain_many_backends
+    domains:
+      - example.com
+    tls:
+      origin_mode: flexible_http
+      origin_http_port: 80
+      certificate_file: ""
+      private_key_file: ""
+    default_backend_pool: main_app_pool
+
+  - id: many_domains_one_backend
+    domains:
+      - brand-a.example.net
+      - brand-b.example.net
+      - brand-c.example.net
+    tls:
+      origin_mode: flexible_http
+      origin_http_port: 80
+    default_backend_pool: shared_app_pool
+
+  - id: path_based_backends
+    domains:
+      - app.example.org
+    tls:
+      origin_mode: full_strict
+      origin_https_port: 443
+      certificate_file: /etc/kiro/certs/app.example.org.pem
+      private_key_file: /etc/kiro/certs/app.example.org.key
+      cloudflare_origin_ca: true
+    default_backend_pool: main_app_pool
+    routes:
+      - path: /api/
+        backend_pool: api_pool
+      - path: /login
+        backend_pool: api_pool
+        rpm_per_ip: 10
+        challenge_score: 50

@@ -1,0 +1,38 @@
+# Cấu hình tối giản cho người thuê có website dùng Cloudflare Free.
+# Mặc định không cần cert/key ở origin vì dùng flexible_http.
+
+mode: full
+plan: school_smb
+license_key: KIRO-XXXX-XXXX
+
+admin:
+  allow_ips:
+    - 203.0.113.10/32
+
+server:
+  interface: eth0
+  ssh_port: 22
+
+website:
+  enabled: true
+  cloudflare: true
+  tls_mode: flexible_http
+
+  sites:
+    - domains:
+        - example.com
+        - www.example.com
+      backend: http://127.0.0.1:3000
+
+protection:
+  profile: balanced
+  waf: true
+  bot: true
+  auto_attack_mode: true
+
+updates:
+  auto_security_updates: true
+
+telemetry:
+  enabled: false
+

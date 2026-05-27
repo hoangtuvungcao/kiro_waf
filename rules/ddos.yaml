@@ -1,0 +1,46 @@
+profiles:
+  normal:
+    per_ip_pps: 3000
+    per_subnet24_pps: 30000
+    per_ip_new_conn_per_second: 100
+    syn_per_ip_per_second: 200
+    udp_per_ip_per_second: 500
+    icmp_per_ip_per_second: 30
+    temporary_block_seconds: 900
+    auto_unblock: true
+
+  elevated:
+    per_ip_pps: 1500
+    per_subnet24_pps: 15000
+    per_ip_new_conn_per_second: 60
+    syn_per_ip_per_second: 100
+    udp_per_ip_per_second: 250
+    icmp_per_ip_per_second: 15
+    temporary_block_seconds: 1800
+    auto_unblock: true
+
+  attack:
+    per_ip_pps: 600
+    per_subnet24_pps: 6000
+    per_ip_new_conn_per_second: 30
+    syn_per_ip_per_second: 50
+    udp_per_ip_per_second: 120
+    icmp_per_ip_per_second: 8
+    temporary_block_seconds: 3600
+    auto_unblock: true
+
+  lockdown:
+    per_ip_pps: 100
+    per_subnet24_pps: 1000
+    per_ip_new_conn_per_second: 10
+    syn_per_ip_per_second: 20
+    udp_per_ip_per_second: 40
+    icmp_per_ip_per_second: 3
+    temporary_block_seconds: 7200
+    auto_unblock: true
+
+safety:
+  never_block_allowlist: true
+  max_temp_blocks: 200000
+  max_bad_subnets: 10000
+  block_expiry_scan_seconds: 30

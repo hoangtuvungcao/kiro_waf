@@ -1,0 +1,28 @@
+# Cấu hình tối giản cho người thuê chỉ cần bảo vệ server, không chạy website.
+
+mode: server
+plan: school_smb
+license_key: KIRO-XXXX-XXXX
+
+admin:
+  allow_ips:
+    - 203.0.113.10/32
+
+server:
+  interface: eth0
+  ssh_port: 22
+  allow_ports:
+    - 22
+    - 80
+    - 443
+
+protection:
+  profile: balanced # light, balanced, strict, lockdown
+  auto_attack_mode: true
+
+updates:
+  auto_security_updates: true
+
+telemetry:
+  enabled: false
+
