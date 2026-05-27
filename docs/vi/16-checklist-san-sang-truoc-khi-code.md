@@ -47,7 +47,7 @@ theo từng phase. Chưa đủ để bán sản phẩm, nhưng đủ để dev k
 - [ ] Có admin IP allowlist.
 - [ ] Có console recovery path.
 - [x] Có dry-run.
-- [ ] Có rollback timer.
+- [x] Có rollback timer.
 - [ ] Có last known good config.
 - [ ] Đã test trong lab, không test trực tiếp trên máy production.
 

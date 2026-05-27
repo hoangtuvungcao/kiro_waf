@@ -104,6 +104,12 @@ func TestLoadRuntimeExpandsAdvancedConfig(t *testing.T) {
 	if !cfg.CFOriginLock.Enabled || cfg.CFOriginLock.IPv4File == "" || cfg.CFOriginLock.IPv6File == "" {
 		t.Fatal("expected advanced runtime cloudflare origin lock settings")
 	}
+	if cfg.Paths.StateDir != "/var/lib/kiro" || cfg.Paths.LastGoodConfigDir == "" {
+		t.Fatalf("unexpected runtime paths: %#v", cfg.Paths)
+	}
+	if cfg.Safety.RollbackTimerSeconds != 60 {
+		t.Fatalf("rollback timer = %d, want 60", cfg.Safety.RollbackTimerSeconds)
+	}
 }
 
 func TestLoadRuntimeRejectsProviderConfig(t *testing.T) {

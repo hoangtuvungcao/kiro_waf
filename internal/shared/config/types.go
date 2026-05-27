@@ -19,6 +19,8 @@ type RuntimeConfig struct {
 	SourceKind   Kind
 	Mode         string
 	Plan         string
+	Paths        RuntimePaths
+	Safety       RuntimeSafety
 	License      RuntimeLicense
 	Identity     RuntimeIdentity
 	Firewall     RuntimeFirewall
@@ -31,6 +33,18 @@ type RuntimeConfig struct {
 	BackendPools []RuntimeBackendPool
 	Sites        []RuntimeSite
 	Protection   RuntimeProtection
+}
+
+type RuntimePaths struct {
+	StateDir          string
+	LastGoodConfigDir string
+}
+
+type RuntimeSafety struct {
+	DryRunBeforeApply                 bool
+	RequireAdminIPBeforeFirewallApply bool
+	RollbackTimerSeconds              int
+	RequireLocalConsoleWarning        bool
 }
 
 type RuntimeFirewall struct {
@@ -157,6 +171,7 @@ type AdvancedConfig struct {
 	Mode              string            `yaml:"mode"`
 	DeploymentProfile string            `yaml:"deployment_profile"`
 	NodeRole          string            `yaml:"node_role"`
+	Paths             AdvancedPaths     `yaml:"paths"`
 	License           AdvancedLicense   `yaml:"license"`
 	ServerIdentity    ServerIdentity    `yaml:"server_identity"`
 	Safety            AdvancedSafety    `yaml:"safety"`
@@ -166,8 +181,16 @@ type AdvancedConfig struct {
 	BackendPools      []BackendPool     `yaml:"backend_pools"`
 }
 
+type AdvancedPaths struct {
+	StateDir          string `yaml:"state_dir"`
+	LastGoodConfigDir string `yaml:"last_good_config_dir"`
+}
+
 type AdvancedSafety struct {
+	DryRunBeforeApply                 bool `yaml:"dry_run_before_apply"`
 	RequireAdminIPBeforeFirewallApply bool `yaml:"require_admin_ip_before_firewall_apply"`
+	RollbackTimerSeconds              int  `yaml:"rollback_timer_seconds"`
+	RequireLocalConsoleWarning        bool `yaml:"require_local_console_warning"`
 }
 
 type ServerProtection struct {

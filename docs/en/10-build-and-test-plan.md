@@ -43,3 +43,9 @@ Firewall dry-run command:
 ```text
 kiro-agent --config configs/kiro.example.yaml --firewall-dry-run
 ```
+
+Firewall lab apply runbook:
+
+```text
+docs/en/16-firewall-apply-lab-runbook.md
+```

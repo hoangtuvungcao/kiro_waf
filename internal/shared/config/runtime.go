@@ -50,6 +50,16 @@ func ExpandTenant(cfg TenantConfig) (RuntimeConfig, error) {
 		SourceKind: KindTenant,
 		Mode:       cfg.Mode,
 		Plan:       cfg.Plan,
+		Paths: RuntimePaths{
+			StateDir:          "/var/lib/kiro",
+			LastGoodConfigDir: "/var/lib/kiro/last-good-config",
+		},
+		Safety: RuntimeSafety{
+			DryRunBeforeApply:                 true,
+			RequireAdminIPBeforeFirewallApply: true,
+			RollbackTimerSeconds:              60,
+			RequireLocalConsoleWarning:        true,
+		},
 		AdminCIDRs: append([]string(nil), cfg.Admin.AllowIPs...),
 		Interface:  cfg.Server.Interface,
 		SSHPort:    cfg.Server.SSHPort,
@@ -122,6 +132,16 @@ func ExpandAdvanced(cfg AdvancedConfig) (RuntimeConfig, error) {
 		SourceKind: KindAdvanced,
 		Mode:       cfg.Mode,
 		Plan:       cfg.DeploymentProfile,
+		Paths: RuntimePaths{
+			StateDir:          cfg.Paths.StateDir,
+			LastGoodConfigDir: cfg.Paths.LastGoodConfigDir,
+		},
+		Safety: RuntimeSafety{
+			DryRunBeforeApply:                 cfg.Safety.DryRunBeforeApply,
+			RequireAdminIPBeforeFirewallApply: cfg.Safety.RequireAdminIPBeforeFirewallApply,
+			RollbackTimerSeconds:              cfg.Safety.RollbackTimerSeconds,
+			RequireLocalConsoleWarning:        cfg.Safety.RequireLocalConsoleWarning,
+		},
 		License: RuntimeLicense{
 			File:                cfg.License.File,
 			ProviderPublicKey:   cfg.License.ProviderPublicKey,
@@ -158,6 +178,15 @@ func ExpandAdvanced(cfg AdvancedConfig) (RuntimeConfig, error) {
 	}
 	if runtime.SSHPort == 0 {
 		runtime.SSHPort = 22
+	}
+	if runtime.Paths.StateDir == "" {
+		runtime.Paths.StateDir = "/var/lib/kiro"
+	}
+	if runtime.Paths.LastGoodConfigDir == "" {
+		runtime.Paths.LastGoodConfigDir = runtime.Paths.StateDir + "/last-good-config"
+	}
+	if runtime.Safety.RollbackTimerSeconds == 0 {
+		runtime.Safety.RollbackTimerSeconds = 60
 	}
 	if runtime.Firewall.TemporaryBlockSeconds == 0 {
 		runtime.Firewall.TemporaryBlockSeconds = 900

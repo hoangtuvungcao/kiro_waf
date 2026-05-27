@@ -177,6 +177,9 @@ func ValidateAdvanced(cfg AdvancedConfig) error {
 			return errors.New("server_identity.fingerprint_salt_id is required when license is enforced")
 		}
 	}
+	if cfg.Safety.RollbackTimerSeconds < 0 {
+		return errors.New("safety.rollback_timer_seconds must not be negative")
+	}
 	for _, port := range cfg.ServerProtection.Nftables.AllowPorts {
 		if port <= 0 || port > 65535 {
 			return fmt.Errorf("server_protection.nftables.allow_ports contains invalid port %d", port)

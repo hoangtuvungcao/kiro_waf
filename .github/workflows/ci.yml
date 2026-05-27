@@ -32,6 +32,7 @@ jobs:
         run: |
           python3 -m json.tool examples/license.example.json >/tmp/license.json
           python3 -m json.tool examples/update-manifest.example.json >/tmp/update-manifest.json
+          bash -n deployments/lab/firewall-apply-ubuntu-22.04.sh
 
       - name: Config checks
         run: |
@@ -54,3 +55,8 @@ jobs:
           go run ./cmd/kiro-agent --config configs/kiro.example.yaml --firewall-dry-run | grep kiro_cloudflare_direct_origin_drop
           go run ./cmd/kiro-agent --config configs/tenant.server-only.example.yaml --firewall-dry-run --firewall-snapshot-dir "$tmpdir" >/tmp/kiro-nftables.rules
           test -s "$tmpdir/last-good-nftables.json"
+          if go run ./cmd/kiro-agent --config configs/tenant.server-only.example.yaml --firewall-apply 2>/tmp/kiro-firewall-apply.err; then
+            echo "firewall apply must require lab acknowledgement"
+            exit 1
+          fi
+          grep KIRO_LAB_FIREWALL_APPLY /tmp/kiro-firewall-apply.err

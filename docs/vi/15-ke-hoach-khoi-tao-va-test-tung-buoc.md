@@ -166,6 +166,8 @@ Done khi:
 
 - Có script lab.
 - Có runbook recovery.
+- CLI apply thật bị khóa bằng `--firewall-lab-ack KIRO_LAB_FIREWALL_APPLY`.
+- Có pending rollback state và lệnh confirm/rollback.
 
 ## Phase 5: Proxy generator
 
