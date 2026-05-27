@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"kiro_waf/internal/agent/firewall"
+	"kiro_waf/internal/agent/proxy"
 	"kiro_waf/internal/shared/buildinfo"
 	"kiro_waf/internal/shared/config"
 	"kiro_waf/internal/shared/licenseverify"
@@ -29,6 +30,9 @@ func main() {
 	firewallStateDir := flag.String("firewall-state-dir", "", "override firewall state directory")
 	firewallRollbackSeconds := flag.Int("firewall-rollback-seconds", 0, "override firewall rollback timer in seconds")
 	firewallLabAck := flag.String("firewall-lab-ack", "", "required value for firewall apply/rollback: KIRO_LAB_FIREWALL_APPLY")
+	proxyDryRun := flag.Bool("proxy-dry-run", false, "generate nginx config and exit without reload")
+	proxyOutputDir := flag.String("proxy-output-dir", "", "optional directory to write generated nginx config")
+	proxyValidate := flag.Bool("proxy-validate", false, "run nginx -t against generated config after writing files")
 	check := flag.Bool("check", false, "validate config and exit")
 	version := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
@@ -103,6 +107,42 @@ func main() {
 		}
 		return
 	}
+	if *proxyDryRun {
+		runtime, err := config.LoadRuntimeFile(*configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "runtime expansion failed: %v\n", err)
+			os.Exit(1)
+		}
+		plan, err := proxy.GenerateNginx(runtime)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "proxy generation failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Print(plan.NginxConfig)
+		for _, warning := range plan.Warnings {
+			fmt.Fprintf(os.Stderr, "proxy warning: %s\n", warning)
+		}
+		if *proxyOutputDir != "" {
+			mainPath, cfPath, err := proxy.WritePlan(*proxyOutputDir, plan)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "proxy write failed: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Fprintf(os.Stderr, "proxy files: nginx=%s cloudflare_real_ip=%s\n", mainPath, cfPath)
+			if *proxyValidate {
+				runner := proxy.NginxRunner{}
+				if err := runner.Validate(mainPath); err != nil {
+					fmt.Fprintf(os.Stderr, "proxy validate failed: %v\n", err)
+					os.Exit(1)
+				}
+				fmt.Fprintln(os.Stderr, "proxy validate ok")
+			}
+		} else if *proxyValidate {
+			fmt.Fprintln(os.Stderr, "proxy validation requires --proxy-output-dir")
+			os.Exit(1)
+		}
+		return
+	}
 	if *firewallApply || *firewallConfirm || *firewallRollback || *firewallRollbackIfExpired {
 		runtime, err := config.LoadRuntimeFile(*configPath)
 		if err != nil {
@@ -156,7 +196,7 @@ func main() {
 			result.AppliedRulesetSHA256, result.PendingPath, result.RollbackDeadline, result.SnapshotPath)
 		return
 	}
-	fmt.Fprintln(os.Stderr, "usage: kiro-agent --check | --version | --firewall-dry-run | --firewall-apply | --firewall-confirm | --firewall-rollback")
+	fmt.Fprintln(os.Stderr, "usage: kiro-agent --check | --version | --firewall-dry-run | --proxy-dry-run | --firewall-apply | --firewall-confirm | --firewall-rollback")
 	os.Exit(2)
 }
 

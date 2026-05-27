@@ -92,14 +92,20 @@ type RuntimeUpstream struct {
 type RuntimeSite struct {
 	ID                 string
 	Domains            []string
+	TLSMode            string
+	CertFile           string
+	KeyFile            string
 	DefaultBackendPool string
 	Routes             []RuntimeRoute
 }
 
 type RuntimeRoute struct {
-	Path        string
-	BackendPool string
-	Protection  string
+	Path         string
+	BackendPool  string
+	Protection   string
+	RPMPerIP     int
+	CacheSeconds int
+	MaxBodyMB    int
 }
 
 type RuntimeProtection struct {
@@ -241,14 +247,24 @@ type ServerIdentity struct {
 type AdvancedSite struct {
 	ID                 string          `yaml:"id"`
 	Domains            []string        `yaml:"domains"`
+	TLS                AdvancedTLS     `yaml:"tls"`
 	Policy             string          `yaml:"policy"`
 	DefaultBackendPool string          `yaml:"default_backend_pool"`
 	Routes             []AdvancedRoute `yaml:"routes"`
 }
 
+type AdvancedTLS struct {
+	OriginMode      string `yaml:"origin_mode"`
+	CertificateFile string `yaml:"certificate_file"`
+	PrivateKeyFile  string `yaml:"private_key_file"`
+}
+
 type AdvancedRoute struct {
-	Path        string `yaml:"path"`
-	BackendPool string `yaml:"backend_pool"`
+	Path         string `yaml:"path"`
+	BackendPool  string `yaml:"backend_pool"`
+	RPMPerIP     int    `yaml:"rpm_per_ip"`
+	CacheSeconds int    `yaml:"cache_seconds"`
+	MaxBodyMB    int    `yaml:"max_body_mb"`
 }
 
 type BackendPool struct {

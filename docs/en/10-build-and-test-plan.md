@@ -49,3 +49,9 @@ Firewall lab apply runbook:
 ```text
 docs/en/16-firewall-apply-lab-runbook.md
 ```
+
+Proxy generator dry-run:
+
+```text
+kiro-agent --config configs/kiro.example.yaml --proxy-dry-run
+```

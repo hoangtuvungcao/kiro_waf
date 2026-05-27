@@ -175,8 +175,8 @@ Mục tiêu:
 
 - Generate Nginx config từ `sites/backend_pools/routes`.
 - Validate bằng `nginx -t`.
-- Reload an toàn.
-- Rollback nếu reload fail.
+- Chỉ dry-run/validate ở phase này, chưa reload thật.
+- Reload an toàn và rollback reload chuyển sang phase sau.
 
 Test bắt buộc:
 
@@ -190,8 +190,9 @@ Test bắt buộc:
 
 Done khi:
 
-- Proxy config chạy trong lab.
-- Backend health check cơ bản hoạt động.
+- Proxy config sinh deterministic.
+- Có validate hook bằng `nginx -t`.
+- Có runbook lab.
 
 ## Phase 6: Governor và overload mode
 

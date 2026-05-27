@@ -219,6 +219,16 @@ func ValidateAdvanced(cfg AdvancedConfig) error {
 		if strings.TrimSpace(site.ID) == "" {
 			return errors.New("site id is required")
 		}
+		if site.TLS.OriginMode != "" {
+			if !allowedTLSModes[site.TLS.OriginMode] {
+				return fmt.Errorf("site %q has invalid tls.origin_mode %q", site.ID, site.TLS.OriginMode)
+			}
+			if site.TLS.OriginMode == "full_tls" || site.TLS.OriginMode == "full_strict" {
+				if strings.TrimSpace(site.TLS.CertificateFile) == "" || strings.TrimSpace(site.TLS.PrivateKeyFile) == "" {
+					return fmt.Errorf("site %q tls.%s requires certificate_file and private_key_file", site.ID, site.TLS.OriginMode)
+				}
+			}
+		}
 		if len(site.Domains) == 0 {
 			return fmt.Errorf("site %q must have domains", site.ID)
 		}
@@ -232,6 +242,9 @@ func ValidateAdvanced(cfg AdvancedConfig) error {
 			return fmt.Errorf("site %q references unknown default backend pool %q", site.ID, site.DefaultBackendPool)
 		}
 		for _, route := range site.Routes {
+			if strings.TrimSpace(route.Path) == "" || !strings.HasPrefix(route.Path, "/") {
+				return fmt.Errorf("site %q route path must start with /", site.ID)
+			}
 			if route.BackendPool != "" && !pools[route.BackendPool] {
 				return fmt.Errorf("site %q route %q references unknown backend pool %q", site.ID, route.Path, route.BackendPool)
 			}

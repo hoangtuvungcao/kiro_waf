@@ -60,3 +60,13 @@ jobs:
             exit 1
           fi
           grep KIRO_LAB_FIREWALL_APPLY /tmp/kiro-firewall-apply.err
+
+      - name: Proxy generator smoke
+        run: |
+          tmpdir="$(mktemp -d)"
+          go run ./cmd/kiro-agent --config configs/kiro.example.yaml --proxy-dry-run --proxy-output-dir "$tmpdir" >/tmp/kiro-nginx.conf
+          grep 'server_name example.com www.example.com;' /tmp/kiro-nginx.conf
+          grep 'location /api/' /tmp/kiro-nginx.conf
+          grep 'set_real_ip_from' "$tmpdir/cloudflare-real-ip.conf"
+          go run ./cmd/kiro-agent --config configs/tenant.server-only.example.yaml --proxy-dry-run | grep 'proxy disabled in server mode'
+          go run ./cmd/kiro-agent --config configs/tenant.full-strict.example.yaml --proxy-dry-run | grep 'listen 443 ssl'

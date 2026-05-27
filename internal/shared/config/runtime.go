@@ -102,6 +102,9 @@ func ExpandTenant(cfg TenantConfig) (RuntimeConfig, error) {
 		runtimeSite := RuntimeSite{
 			ID:                 fmt.Sprintf("site_%d", siteIndex+1),
 			Domains:            append([]string(nil), site.Domains...),
+			TLSMode:            cfg.Website.TLSMode,
+			CertFile:           cfg.Website.CertFile,
+			KeyFile:            cfg.Website.KeyFile,
 			DefaultBackendPool: defaultPool,
 		}
 		for routeIndex, route := range site.Routes {
@@ -205,12 +208,18 @@ func ExpandAdvanced(cfg AdvancedConfig) (RuntimeConfig, error) {
 		runtimeSite := RuntimeSite{
 			ID:                 site.ID,
 			Domains:            append([]string(nil), site.Domains...),
+			TLSMode:            firstNonEmpty(site.TLS.OriginMode, runtime.TLSMode, "flexible_http"),
+			CertFile:           site.TLS.CertificateFile,
+			KeyFile:            site.TLS.PrivateKeyFile,
 			DefaultBackendPool: site.DefaultBackendPool,
 		}
 		for _, route := range site.Routes {
 			runtimeSite.Routes = append(runtimeSite.Routes, RuntimeRoute{
-				Path:        route.Path,
-				BackendPool: route.BackendPool,
+				Path:         route.Path,
+				BackendPool:  route.BackendPool,
+				RPMPerIP:     route.RPMPerIP,
+				CacheSeconds: route.CacheSeconds,
+				MaxBodyMB:    route.MaxBodyMB,
 			})
 		}
 		runtime.Sites = append(runtime.Sites, runtimeSite)
@@ -298,4 +307,13 @@ func sshPortFromAllowPorts(ports []int) int {
 		}
 	}
 	return 22
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

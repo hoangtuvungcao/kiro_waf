@@ -72,7 +72,7 @@ theo từng phase. Chưa đủ để bán sản phẩm, nhưng đủ để dev k
 - [ ] Agent binary không chứa code issue/sign license.
 - [ ] Provider binary không chứa code apply firewall/XDP.
 - [x] Firewall dry-run pass.
-- [ ] Proxy generator pass.
+- [x] Proxy generator pass.
 - [ ] Update rollback pass.
 - [ ] Support bundle redact secret.
 - [ ] Tài liệu cài đặt có thể làm theo từ đầu đến cuối.

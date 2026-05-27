@@ -59,6 +59,7 @@ số khi cần. Khi sản phẩm lớn hơn mới cần nâng cấp sang databas
 - [Production và thương mại readiness](docs/vi/21-production-va-thuong-mai-readiness.md)
 - [PRD/SRS sản phẩm](docs/vi/22-prd-srs-san-pham.md)
 - [Runbook lab firewall apply](docs/vi/23-firewall-apply-lab-runbook.md)
+- [Runbook proxy generator](docs/vi/24-proxy-generator-runbook.md)
 
 ## English Docs
 
@@ -79,3 +80,4 @@ số khi cần. Khi sản phẩm lớn hơn mới cần nâng cấp sang databas
 - [Final readiness](docs/en/14-final-readiness.md)
 - [Production and commercial readiness](docs/en/15-production-commercial-readiness.md)
 - [Firewall apply lab runbook](docs/en/16-firewall-apply-lab-runbook.md)
+- [Proxy generator runbook](docs/en/17-proxy-generator-runbook.md)

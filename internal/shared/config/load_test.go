@@ -104,6 +104,9 @@ func TestLoadRuntimeExpandsAdvancedConfig(t *testing.T) {
 	if !cfg.CFOriginLock.Enabled || cfg.CFOriginLock.IPv4File == "" || cfg.CFOriginLock.IPv6File == "" {
 		t.Fatal("expected advanced runtime cloudflare origin lock settings")
 	}
+	if cfg.Sites[0].TLSMode != "flexible_http" {
+		t.Fatalf("site tls mode = %q", cfg.Sites[0].TLSMode)
+	}
 	if cfg.Paths.StateDir != "/var/lib/kiro" || cfg.Paths.LastGoodConfigDir == "" {
 		t.Fatalf("unexpected runtime paths: %#v", cfg.Paths)
 	}
