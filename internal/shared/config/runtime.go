@@ -106,6 +106,18 @@ func ExpandAdvanced(cfg AdvancedConfig) (RuntimeConfig, error) {
 		SourceKind: KindAdvanced,
 		Mode:       cfg.Mode,
 		Plan:       cfg.DeploymentProfile,
+		License: RuntimeLicense{
+			File:                cfg.License.File,
+			ProviderPublicKey:   cfg.License.ProviderPublicKey,
+			RequireValidLicense: cfg.License.RequireValidLicense,
+			AllowGracePeriod:    cfg.License.AllowGracePeriod,
+		},
+		Identity: RuntimeIdentity{
+			UseMachineID:      cfg.ServerIdentity.UseMachineID,
+			UsePrimaryMAC:     cfg.ServerIdentity.UsePrimaryMAC,
+			UseAllMACsHash:    cfg.ServerIdentity.UseAllMACsHash,
+			FingerprintSaltID: cfg.ServerIdentity.FingerprintSaltID,
+		},
 	}
 	for _, pool := range cfg.BackendPools {
 		runtimePool := RuntimeBackendPool{ID: pool.ID}

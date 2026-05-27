@@ -143,6 +143,17 @@ func ValidateAdvanced(cfg AdvancedConfig) error {
 	if strings.TrimSpace(cfg.DeploymentProfile) == "" {
 		return errors.New("deployment_profile is required")
 	}
+	if cfg.License.RequireValidLicense {
+		if strings.TrimSpace(cfg.License.File) == "" {
+			return errors.New("license.file is required when require_valid_license is true")
+		}
+		if strings.TrimSpace(cfg.License.ProviderPublicKey) == "" {
+			return errors.New("license.provider_public_key is required when require_valid_license is true")
+		}
+		if strings.TrimSpace(cfg.ServerIdentity.FingerprintSaltID) == "" {
+			return errors.New("server_identity.fingerprint_salt_id is required when license is enforced")
+		}
+	}
 	if len(cfg.BackendPools) == 0 {
 		return errors.New("backend_pools must not be empty")
 	}

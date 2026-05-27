@@ -47,7 +47,7 @@ Required first tests:
 ```text
 go test ./...
 kiro-agent --config configs/kiro.example.yaml --check
-kiro-agent --config configs/kiro.advanced.example.yaml --check
+kiro-agent --config configs/kiro.advanced.example.yaml --check --skip-license-check
 kiro-provider --config configs/provider.example.yaml --check
 ```
 

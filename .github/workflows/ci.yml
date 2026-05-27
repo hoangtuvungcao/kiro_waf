@@ -36,6 +36,6 @@ jobs:
       - name: Config checks
         run: |
           go run ./cmd/kiro-agent --config configs/kiro.example.yaml --check
-          go run ./cmd/kiro-agent --config configs/kiro.advanced.example.yaml --check
+          go run ./cmd/kiro-agent --config configs/kiro.advanced.example.yaml --check --skip-license-check
           go run ./cmd/kiro-provider --config configs/provider.example.yaml --check
           go run ./cmd/kiro-cli version

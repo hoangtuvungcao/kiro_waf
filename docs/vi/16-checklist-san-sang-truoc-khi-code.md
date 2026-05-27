@@ -30,16 +30,16 @@ theo từng phase. Chưa đủ để bán sản phẩm, nhưng đủ để dev k
 
 ## Checklist trước khi viết code
 
-- [ ] Chọn ngôn ngữ chính: Go.
-- [ ] Chốt Go module name.
-- [ ] Chốt binary names: `kiro-agent`, `kiro-cli`, `kiro-provider`.
-- [ ] Chốt ranh giới import: agent không import provider, provider không import agent firewall/ebpf.
-- [ ] Chốt format config v1.
-- [ ] Chốt cơ chế expand simple config -> runtime advanced config.
-- [ ] Tạo test fixtures cho `kiro.example.yaml`, `tenant.*.example.yaml`, `kiro.advanced.example.yaml`.
-- [ ] Chốt public/private key format cho license.
-- [ ] Tạo test fixtures cho config hợp lệ/lỗi.
-- [ ] Tạo fake license dùng trong unit test.
+- [x] Chọn ngôn ngữ chính: Go.
+- [x] Chốt Go module name.
+- [x] Chốt binary names: `kiro-agent`, `kiro-cli`, `kiro-provider`.
+- [x] Chốt ranh giới import: agent không import provider, provider không import agent firewall/ebpf.
+- [x] Chốt format config v1.
+- [x] Chốt cơ chế expand simple config -> runtime advanced config.
+- [x] Tạo test fixtures cho `kiro.example.yaml`, `tenant.*.example.yaml`, `kiro.advanced.example.yaml`.
+- [x] Chốt public/private key format cho license.
+- [x] Tạo test fixtures cho config hợp lệ/lỗi.
+- [x] Tạo fake license dùng trong unit test.
 - [ ] Tạo lab notes cho Ubuntu 22.04 LTS.
 
 ## Checklist trước khi apply firewall thật

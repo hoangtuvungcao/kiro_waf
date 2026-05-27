@@ -84,6 +84,30 @@ Agent chỉ cần public key của nhà cung cấp để verify:
 /etc/kiro/provider-public-key.pem
 ```
 
+Định dạng đã chốt cho MVP:
+
+- Thuật toán ký: Ed25519.
+- Public key: PEM `PUBLIC KEY` hoặc chuỗi `ed25519:<base64 raw public key>`.
+- Signature trong `license.json`: `ed25519:<base64 raw signature>`.
+- Dữ liệu được ký: JSON canonical của object `payload`, không bao gồm field
+  `signature`.
+- Agent chỉ verify bằng public key, không có private key và không có quyền issue
+  license.
+
+Fingerprint binding:
+
+```text
+fingerprint_hash =
+  SHA256(machine_id + primary_mac + all_macs_hash + hostname + kernel_release + provider_salt)
+```
+
+Trong cấu hình nâng cao, `server_identity.fingerprint_salt_id` là salt do nhà
+cung cấp phát hành. Khi cần debug hoặc kích hoạt offline:
+
+```text
+kiro-cli license fingerprint --salt default-provider-key-2026
+```
+
 ## Kích hoạt online
 
 ```text
@@ -104,7 +128,7 @@ Luồng:
 ## Kích hoạt offline
 
 ```text
-kiro license fingerprint > fingerprint.txt
+kiro-cli license fingerprint --salt default-provider-key-2026 > fingerprint.txt
 kiro license install license.json
 ```
 
@@ -123,4 +147,3 @@ Provider kiểm tra:
 - Server cũ có còn active không.
 - Số lần rebind trong tháng.
 - Có dấu hiệu dùng một license cho nhiều máy không.
-

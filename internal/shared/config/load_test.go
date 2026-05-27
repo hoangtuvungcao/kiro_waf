@@ -81,6 +81,12 @@ func TestLoadRuntimeExpandsAdvancedConfig(t *testing.T) {
 	if len(cfg.Sites) == 0 || len(cfg.BackendPools) == 0 {
 		t.Fatal("expected sites and backend pools")
 	}
+	if cfg.License.File != "/etc/kiro/license.json" {
+		t.Fatalf("license file = %q", cfg.License.File)
+	}
+	if cfg.Identity.FingerprintSaltID != "default-provider-key-2026" {
+		t.Fatalf("fingerprint salt id = %q", cfg.Identity.FingerprintSaltID)
+	}
 }
 
 func TestLoadRuntimeRejectsProviderConfig(t *testing.T) {
@@ -127,6 +133,22 @@ func TestValidateAdvancedRejectsUnknownRouteBackendPool(t *testing.T) {
 	}
 	if err := ValidateAdvanced(cfg); err == nil {
 		t.Fatal("expected missing route backend pool to fail")
+	}
+}
+
+func TestValidateAdvancedRequiresLicenseFilesWhenEnforced(t *testing.T) {
+	cfg := AdvancedConfig{
+		Mode:              "server",
+		DeploymentProfile: "school_smb",
+		NodeRole:          "protected_server",
+		License:           AdvancedLicense{RequireValidLicense: true},
+		BackendPools: []BackendPool{{
+			ID:        "known",
+			Upstreams: []Upstream{{ID: "upstream", URL: "http://127.0.0.1:3000"}},
+		}},
+	}
+	if err := ValidateAdvanced(cfg); err == nil {
+		t.Fatal("expected missing enforced license files to fail")
 	}
 }
 

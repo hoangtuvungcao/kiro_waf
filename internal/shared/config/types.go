@@ -19,6 +19,8 @@ type RuntimeConfig struct {
 	SourceKind   Kind
 	Mode         string
 	Plan         string
+	License      RuntimeLicense
+	Identity     RuntimeIdentity
 	AdminCIDRs   []string
 	Interface    string
 	SSHPort      int
@@ -27,6 +29,20 @@ type RuntimeConfig struct {
 	BackendPools []RuntimeBackendPool
 	Sites        []RuntimeSite
 	Protection   RuntimeProtection
+}
+
+type RuntimeLicense struct {
+	File                string
+	ProviderPublicKey   string
+	RequireValidLicense bool
+	AllowGracePeriod    bool
+}
+
+type RuntimeIdentity struct {
+	UseMachineID      bool
+	UsePrimaryMAC     bool
+	UseAllMACsHash    bool
+	FingerprintSaltID string
 }
 
 type RuntimeBackendPool struct {
@@ -118,11 +134,27 @@ type TenantTelemetry struct {
 }
 
 type AdvancedConfig struct {
-	Mode              string         `yaml:"mode"`
-	DeploymentProfile string         `yaml:"deployment_profile"`
-	NodeRole          string         `yaml:"node_role"`
-	Sites             []AdvancedSite `yaml:"sites"`
-	BackendPools      []BackendPool  `yaml:"backend_pools"`
+	Mode              string          `yaml:"mode"`
+	DeploymentProfile string          `yaml:"deployment_profile"`
+	NodeRole          string          `yaml:"node_role"`
+	License           AdvancedLicense `yaml:"license"`
+	ServerIdentity    ServerIdentity  `yaml:"server_identity"`
+	Sites             []AdvancedSite  `yaml:"sites"`
+	BackendPools      []BackendPool   `yaml:"backend_pools"`
+}
+
+type AdvancedLicense struct {
+	File                string `yaml:"file"`
+	ProviderPublicKey   string `yaml:"provider_public_key"`
+	RequireValidLicense bool   `yaml:"require_valid_license"`
+	AllowGracePeriod    bool   `yaml:"allow_grace_period"`
+}
+
+type ServerIdentity struct {
+	UseMachineID      bool   `yaml:"use_machine_id"`
+	UsePrimaryMAC     bool   `yaml:"use_primary_mac"`
+	UseAllMACsHash    bool   `yaml:"use_all_macs_hash"`
+	FingerprintSaltID string `yaml:"fingerprint_salt_id"`
 }
 
 type AdvancedSite struct {

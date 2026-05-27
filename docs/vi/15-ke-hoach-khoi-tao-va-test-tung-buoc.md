@@ -80,11 +80,17 @@ Test bắt buộc:
 - Machine binding sai fail.
 - Mode không được license cho phép fail.
 - License hết hạn vào grace đúng.
+- Nếu tắt grace period, license hết hạn phải fail ngay.
 
 Done khi:
 
 - Agent không bật feature thương mại nếu license không hợp lệ.
 - Agent chỉ verify license, không có code issue/sign license.
+- `kiro-cli license fingerprint --salt <salt_id>` tạo được fingerprint hash cho
+  kích hoạt offline.
+- Agent đọc `license.file`, `license.provider_public_key` và
+  `server_identity.fingerprint_salt_id` từ config nâng cao; flag CLI chỉ dùng
+  để override/debug.
 
 ## Phase 2.5: Provider license server skeleton
 
