@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Go format check
+        run: |
+          test -z "$(gofmt -l cmd internal tests)"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Validate JSON examples
+        run: |
+          python3 -m json.tool examples/license.example.json >/tmp/license.json
+          python3 -m json.tool examples/update-manifest.example.json >/tmp/update-manifest.json
+
+      - name: Config checks
+        run: |
+          go run ./cmd/kiro-agent --config configs/kiro.example.yaml --check
+          go run ./cmd/kiro-agent --config configs/kiro.advanced.example.yaml --check
+          go run ./cmd/kiro-provider --config configs/provider.example.yaml --check
+          go run ./cmd/kiro-cli version
