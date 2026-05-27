@@ -55,6 +55,22 @@ func ExpandTenant(cfg TenantConfig) (RuntimeConfig, error) {
 		SSHPort:    cfg.Server.SSHPort,
 		Cloudflare: cfg.Website.Cloudflare,
 		TLSMode:    cfg.Website.TLSMode,
+		Firewall: RuntimeFirewall{
+			Enabled:                 true,
+			ProtectConntrack:        true,
+			AllowPorts:              tenantAllowPorts(cfg),
+			SSHAdminOnly:            true,
+			AdminCIDRs:              append([]string(nil), cfg.Admin.AllowIPs...),
+			TemporaryBlockSeconds:   900,
+			RequireAdminBeforeApply: true,
+		},
+		CFOriginLock: RuntimeCloudflareOriginLock{
+			Enabled:               cfg.Website.Cloudflare,
+			RequireProxiedTraffic: cfg.Website.Cloudflare,
+			BlockDirectOriginHTTP: cfg.Website.Cloudflare,
+			IPv4File:              "rules/cloudflare/ips-v4.txt",
+			IPv6File:              "rules/cloudflare/ips-v6.txt",
+		},
 		Protection: RuntimeProtection{
 			Profile:        cfg.Protection.Profile,
 			WAF:            cfg.Protection.WAF,
@@ -118,6 +134,33 @@ func ExpandAdvanced(cfg AdvancedConfig) (RuntimeConfig, error) {
 			UseAllMACsHash:    cfg.ServerIdentity.UseAllMACsHash,
 			FingerprintSaltID: cfg.ServerIdentity.FingerprintSaltID,
 		},
+		AdminCIDRs: append([]string(nil), cfg.ServerProtection.Nftables.AdminIPs...),
+		SSHPort:    sshPortFromAllowPorts(cfg.ServerProtection.Nftables.AllowPorts),
+		Firewall: RuntimeFirewall{
+			Enabled:                 cfg.ServerProtection.Nftables.Enabled,
+			ProtectConntrack:        cfg.ServerProtection.Nftables.ProtectConntrack,
+			AllowPorts:              append([]int(nil), cfg.ServerProtection.Nftables.AllowPorts...),
+			SSHAdminOnly:            cfg.ServerProtection.Nftables.SSHAdminOnly,
+			AdminCIDRs:              append([]string(nil), cfg.ServerProtection.Nftables.AdminIPs...),
+			TemporaryBlockSeconds:   cfg.ServerProtection.DDOS.TemporaryBlockSeconds,
+			RequireAdminBeforeApply: cfg.Safety.RequireAdminIPBeforeFirewallApply,
+		},
+		CFOriginLock: RuntimeCloudflareOriginLock{
+			Enabled:               cfg.WebsiteProtection.Cloudflare.Enabled,
+			RequireProxiedTraffic: cfg.WebsiteProtection.Cloudflare.RequireProxiedTraffic,
+			BlockDirectOriginHTTP: cfg.WebsiteProtection.Cloudflare.BlockDirectOriginHTTP,
+			IPv4File:              cfg.WebsiteProtection.Cloudflare.IPv4File,
+			IPv6File:              cfg.WebsiteProtection.Cloudflare.IPv6File,
+		},
+	}
+	if len(cfg.ServerProtection.Interfaces) > 0 {
+		runtime.Interface = cfg.ServerProtection.Interfaces[0]
+	}
+	if runtime.SSHPort == 0 {
+		runtime.SSHPort = 22
+	}
+	if runtime.Firewall.TemporaryBlockSeconds == 0 {
+		runtime.Firewall.TemporaryBlockSeconds = 900
 	}
 	for _, pool := range cfg.BackendPools {
 		runtimePool := RuntimeBackendPool{ID: pool.ID}
@@ -206,4 +249,24 @@ func poolIDForBackend(index map[string]string, runtime *RuntimeConfig, backend s
 		}},
 	})
 	return id
+}
+
+func tenantAllowPorts(cfg TenantConfig) []int {
+	if len(cfg.Server.AllowPorts) > 0 {
+		return append([]int(nil), cfg.Server.AllowPorts...)
+	}
+	ports := []int{cfg.Server.SSHPort}
+	if cfg.Mode == "full" || cfg.Website.Enabled {
+		ports = append(ports, 80, 443)
+	}
+	return ports
+}
+
+func sshPortFromAllowPorts(ports []int) int {
+	for _, port := range ports {
+		if port == 22 {
+			return 22
+		}
+	}
+	return 22
 }

@@ -47,3 +47,10 @@ jobs:
           go run ./cmd/kiro-provider --config "$tmpdir/provider.yaml" gen-dev-keys
           go run ./cmd/kiro-provider --config "$tmpdir/provider.yaml" issue-test-license --fingerprint-hash sha256:ci-test --agent-out-dir "$tmpdir/agent"
           go run ./cmd/kiro-agent --config configs/kiro.example.yaml --check --license-file "$tmpdir/agent/license.json" --provider-public-key "$tmpdir/agent/provider-public-key.pem" --machine-fingerprint sha256:ci-test
+
+      - name: Firewall dry-run smoke
+        run: |
+          tmpdir="$(mktemp -d)"
+          go run ./cmd/kiro-agent --config configs/kiro.example.yaml --firewall-dry-run | grep kiro_cloudflare_direct_origin_drop
+          go run ./cmd/kiro-agent --config configs/tenant.server-only.example.yaml --firewall-dry-run --firewall-snapshot-dir "$tmpdir" >/tmp/kiro-nftables.rules
+          test -s "$tmpdir/last-good-nftables.json"

@@ -138,6 +138,13 @@ Done khi:
 
 - Output nftables deterministic.
 - Có snapshot last good giả lập.
+- CLI dry-run:
+
+```text
+kiro-agent --config configs/kiro.example.yaml --firewall-dry-run
+kiro-agent --config configs/tenant.server-only.example.yaml --firewall-dry-run \
+  --firewall-snapshot-dir /tmp/kiro-firewall-snapshot
+```
 
 ## Phase 4: Firewall apply an toàn
 

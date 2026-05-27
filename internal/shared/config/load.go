@@ -177,6 +177,16 @@ func ValidateAdvanced(cfg AdvancedConfig) error {
 			return errors.New("server_identity.fingerprint_salt_id is required when license is enforced")
 		}
 	}
+	for _, port := range cfg.ServerProtection.Nftables.AllowPorts {
+		if port <= 0 || port > 65535 {
+			return fmt.Errorf("server_protection.nftables.allow_ports contains invalid port %d", port)
+		}
+	}
+	for _, cidr := range cfg.ServerProtection.Nftables.AdminIPs {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return fmt.Errorf("invalid server_protection.nftables.admin_ips CIDR %q: %w", cidr, err)
+		}
+	}
 	if len(cfg.BackendPools) == 0 {
 		return errors.New("backend_pools must not be empty")
 	}

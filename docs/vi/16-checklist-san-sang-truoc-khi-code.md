@@ -46,7 +46,7 @@ theo từng phase. Chưa đủ để bán sản phẩm, nhưng đủ để dev k
 
 - [ ] Có admin IP allowlist.
 - [ ] Có console recovery path.
-- [ ] Có dry-run.
+- [x] Có dry-run.
 - [ ] Có rollback timer.
 - [ ] Có last known good config.
 - [ ] Đã test trong lab, không test trực tiếp trên máy production.
@@ -71,7 +71,7 @@ theo từng phase. Chưa đủ để bán sản phẩm, nhưng đủ để dev k
 - [ ] License validation pass.
 - [ ] Agent binary không chứa code issue/sign license.
 - [ ] Provider binary không chứa code apply firewall/XDP.
-- [ ] Firewall dry-run pass.
+- [x] Firewall dry-run pass.
 - [ ] Proxy generator pass.
 - [ ] Update rollback pass.
 - [ ] Support bundle redact secret.

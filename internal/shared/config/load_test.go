@@ -98,6 +98,12 @@ func TestLoadRuntimeExpandsAdvancedConfig(t *testing.T) {
 	if cfg.Identity.FingerprintSaltID != "default-provider-key-2026" {
 		t.Fatalf("fingerprint salt id = %q", cfg.Identity.FingerprintSaltID)
 	}
+	if !cfg.Firewall.Enabled || !cfg.Firewall.SSHAdminOnly {
+		t.Fatal("expected advanced runtime firewall settings")
+	}
+	if !cfg.CFOriginLock.Enabled || cfg.CFOriginLock.IPv4File == "" || cfg.CFOriginLock.IPv6File == "" {
+		t.Fatal("expected advanced runtime cloudflare origin lock settings")
+	}
 }
 
 func TestLoadRuntimeRejectsProviderConfig(t *testing.T) {

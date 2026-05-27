@@ -37,3 +37,9 @@ Each phase must have:
 - Do not enable full mode without validating backend and proxy config.
 - Do not trust Cloudflare headers unless the source IP is a Cloudflare range.
 - Do not claim strong DDoS protection without benchmarks.
+
+Firewall dry-run command:
+
+```text
+kiro-agent --config configs/kiro.example.yaml --firewall-dry-run
+```

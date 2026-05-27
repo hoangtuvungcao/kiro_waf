@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"kiro_waf/internal/agent/firewall"
 	"kiro_waf/internal/shared/buildinfo"
 	"kiro_waf/internal/shared/config"
 	"kiro_waf/internal/shared/licenseverify"
@@ -18,6 +20,8 @@ func main() {
 	publicKeyPath := flag.String("provider-public-key", "", "override path to provider public key")
 	machineFingerprint := flag.String("machine-fingerprint", "", "override sha256 fingerprint hash for binding check")
 	skipLicenseCheck := flag.Bool("skip-license-check", false, "validate config without reading license files")
+	firewallDryRun := flag.Bool("firewall-dry-run", false, "generate nftables rules and exit without applying")
+	firewallSnapshotDir := flag.String("firewall-snapshot-dir", "", "optional directory for dry-run last-good snapshot")
 	check := flag.Bool("check", false, "validate config and exit")
 	version := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
@@ -70,7 +74,29 @@ func main() {
 		}
 		return
 	}
-	fmt.Fprintln(os.Stderr, "kiro-agent phase0 supports --check and --version")
+	if *firewallDryRun {
+		runtime, err := config.LoadRuntimeFile(*configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "runtime expansion failed: %v\n", err)
+			os.Exit(1)
+		}
+		plan, err := firewall.GenerateNftables(runtime, firewall.Options{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "firewall dry-run failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Print(plan.Ruleset)
+		if *firewallSnapshotDir != "" {
+			path, err := firewall.WriteLastGoodSnapshot(*firewallSnapshotDir, runtime, plan, time.Time{})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "firewall snapshot failed: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Fprintf(os.Stderr, "firewall snapshot: %s sha256=%s\n", path, plan.SHA256)
+		}
+		return
+	}
+	fmt.Fprintln(os.Stderr, "usage: kiro-agent --check | --version | --firewall-dry-run")
 	os.Exit(2)
 }
 

@@ -21,6 +21,8 @@ type RuntimeConfig struct {
 	Plan         string
 	License      RuntimeLicense
 	Identity     RuntimeIdentity
+	Firewall     RuntimeFirewall
+	CFOriginLock RuntimeCloudflareOriginLock
 	AdminCIDRs   []string
 	Interface    string
 	SSHPort      int
@@ -29,6 +31,24 @@ type RuntimeConfig struct {
 	BackendPools []RuntimeBackendPool
 	Sites        []RuntimeSite
 	Protection   RuntimeProtection
+}
+
+type RuntimeFirewall struct {
+	Enabled                 bool
+	ProtectConntrack        bool
+	AllowPorts              []int
+	SSHAdminOnly            bool
+	AdminCIDRs              []string
+	TemporaryBlockSeconds   int
+	RequireAdminBeforeApply bool
+}
+
+type RuntimeCloudflareOriginLock struct {
+	Enabled               bool
+	RequireProxiedTraffic bool
+	BlockDirectOriginHTTP bool
+	IPv4File              string
+	IPv6File              string
 }
 
 type RuntimeLicense struct {
@@ -134,13 +154,51 @@ type TenantTelemetry struct {
 }
 
 type AdvancedConfig struct {
-	Mode              string          `yaml:"mode"`
-	DeploymentProfile string          `yaml:"deployment_profile"`
-	NodeRole          string          `yaml:"node_role"`
-	License           AdvancedLicense `yaml:"license"`
-	ServerIdentity    ServerIdentity  `yaml:"server_identity"`
-	Sites             []AdvancedSite  `yaml:"sites"`
-	BackendPools      []BackendPool   `yaml:"backend_pools"`
+	Mode              string            `yaml:"mode"`
+	DeploymentProfile string            `yaml:"deployment_profile"`
+	NodeRole          string            `yaml:"node_role"`
+	License           AdvancedLicense   `yaml:"license"`
+	ServerIdentity    ServerIdentity    `yaml:"server_identity"`
+	Safety            AdvancedSafety    `yaml:"safety"`
+	ServerProtection  ServerProtection  `yaml:"server_protection"`
+	WebsiteProtection WebsiteProtection `yaml:"website_protection"`
+	Sites             []AdvancedSite    `yaml:"sites"`
+	BackendPools      []BackendPool     `yaml:"backend_pools"`
+}
+
+type AdvancedSafety struct {
+	RequireAdminIPBeforeFirewallApply bool `yaml:"require_admin_ip_before_firewall_apply"`
+}
+
+type ServerProtection struct {
+	Interfaces []string       `yaml:"interfaces"`
+	DDOS       ServerDDOS     `yaml:"ddos"`
+	Nftables   NftablesConfig `yaml:"nftables"`
+}
+
+type ServerDDOS struct {
+	TemporaryBlockSeconds int `yaml:"temporary_block_seconds"`
+}
+
+type NftablesConfig struct {
+	Enabled          bool     `yaml:"enabled"`
+	ProtectConntrack bool     `yaml:"protect_conntrack"`
+	AllowPorts       []int    `yaml:"allow_ports"`
+	SSHAdminOnly     bool     `yaml:"ssh_admin_only"`
+	AdminIPs         []string `yaml:"admin_ips"`
+}
+
+type WebsiteProtection struct {
+	Enabled    bool             `yaml:"enabled"`
+	Cloudflare CloudflareConfig `yaml:"cloudflare"`
+}
+
+type CloudflareConfig struct {
+	Enabled               bool   `yaml:"enabled"`
+	RequireProxiedTraffic bool   `yaml:"require_proxied_traffic"`
+	BlockDirectOriginHTTP bool   `yaml:"block_direct_origin_http"`
+	IPv4File              string `yaml:"ips_v4_file"`
+	IPv6File              string `yaml:"ips_v6_file"`
 }
 
 type AdvancedLicense struct {
