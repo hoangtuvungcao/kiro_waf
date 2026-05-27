@@ -101,6 +101,8 @@ Mục tiêu:
 - Issue license test.
 - Lưu provider-data bằng file storage.
 - Không import module agent firewall/ebpf/proxy.
+- Export `license.json` và `provider-public-key.pem` cho agent test, không export
+  private key.
 
 Test bắt buộc:
 
@@ -108,6 +110,7 @@ Test bắt buộc:
 - Agent verify license do provider sinh.
 - Provider private key không xuất hiện trong thư mục agent test fixture.
 - `cmd/kiro-provider` không yêu cầu root/network firewall capabilities.
+- CLI provider có lệnh `gen-dev-keys` và `issue-test-license`.
 
 Done khi:
 

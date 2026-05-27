@@ -200,5 +200,11 @@ type StorageSection struct {
 }
 
 type LicenseSection struct {
-	DefaultGraceDays int `yaml:"default_grace_days"`
+	DefaultGraceDays int                    `yaml:"default_grace_days"`
+	Plans            map[string]LicensePlan `yaml:"plans"`
+}
+
+type LicensePlan struct {
+	AllowedModes []string `yaml:"allowed_modes"`
+	Features     []string `yaml:"features"`
 }

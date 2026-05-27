@@ -185,6 +185,10 @@ func EncodeSignature(signature []byte) string {
 	return signaturePrefix + base64.StdEncoding.EncodeToString(signature)
 }
 
+func EncodePublicKey(publicKey ed25519.PublicKey) string {
+	return signaturePrefix + base64.StdEncoding.EncodeToString(publicKey)
+}
+
 func Fingerprint(parts ...string) string {
 	h := sha256.New()
 	for _, part := range parts {

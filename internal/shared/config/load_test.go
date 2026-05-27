@@ -36,6 +36,17 @@ func TestCheckProviderConfig(t *testing.T) {
 	}
 }
 
+func TestLoadProviderConfigIncludesPlans(t *testing.T) {
+	cfg, err := LoadProviderFile("../../../configs/provider.example.yaml")
+	if err != nil {
+		t.Fatalf("load provider config: %v", err)
+	}
+	plan := cfg.Licenses.Plans["school_smb"]
+	if len(plan.AllowedModes) == 0 || len(plan.Features) == 0 {
+		t.Fatal("expected provider license plans")
+	}
+}
+
 func TestTenantRequiresWebsiteInFullMode(t *testing.T) {
 	cfg := TenantConfig{
 		Mode:       "full",

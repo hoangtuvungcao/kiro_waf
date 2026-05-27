@@ -98,6 +98,29 @@ Private key của provider chỉ nằm ở provider server:
 
 Tuyệt đối không copy private key này sang server khách hàng.
 
+Lệnh provider tối thiểu trong MVP:
+
+```text
+kiro-provider --config configs/provider.example.yaml --check
+kiro-provider --config /etc/kiro-provider/provider.yaml gen-dev-keys
+kiro-provider --config /etc/kiro-provider/provider.yaml issue-test-license \
+  --license-id lic_000001 \
+  --customer-id cus_000001 \
+  --server-id srv_000001 \
+  --plan school_smb \
+  --fingerprint-hash sha256:... \
+  --agent-out-dir ./agent-license
+```
+
+`agent-license/` chỉ được chứa:
+
+```text
+license.json
+provider-public-key.pem
+```
+
+Không được có `ed25519-private.key` hoặc signing key trong thư mục này.
+
 Không cài trên server khách hàng:
 
 ```text

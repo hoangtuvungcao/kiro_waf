@@ -39,3 +39,11 @@ jobs:
           go run ./cmd/kiro-agent --config configs/kiro.advanced.example.yaml --check --skip-license-check
           go run ./cmd/kiro-provider --config configs/provider.example.yaml --check
           go run ./cmd/kiro-cli version
+
+      - name: Provider license smoke
+        run: |
+          tmpdir="$(mktemp -d)"
+          sed "s#/etc/kiro-provider#$tmpdir/keys#g; s#/var/lib/kiro-provider#$tmpdir/provider-data#g" configs/provider.example.yaml > "$tmpdir/provider.yaml"
+          go run ./cmd/kiro-provider --config "$tmpdir/provider.yaml" gen-dev-keys
+          go run ./cmd/kiro-provider --config "$tmpdir/provider.yaml" issue-test-license --fingerprint-hash sha256:ci-test --agent-out-dir "$tmpdir/agent"
+          go run ./cmd/kiro-agent --config configs/kiro.example.yaml --check --license-file "$tmpdir/agent/license.json" --provider-public-key "$tmpdir/agent/provider-public-key.pem" --machine-fingerprint sha256:ci-test

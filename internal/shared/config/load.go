@@ -18,46 +18,69 @@ var (
 )
 
 func CheckFile(path string) (Result, error) {
-	raw, err := os.ReadFile(path)
+	_, result, err := loadFile(path)
 	if err != nil {
 		return Result{}, err
+	}
+	return result, nil
+}
+
+func LoadProviderFile(path string) (ProviderConfig, error) {
+	cfg, result, err := loadFile(path)
+	if err != nil {
+		return ProviderConfig{}, err
+	}
+	if result.Kind != KindProvider {
+		return ProviderConfig{}, fmt.Errorf("expected provider config, got %s", result.Kind)
+	}
+	providerCfg, ok := cfg.(ProviderConfig)
+	if !ok {
+		return ProviderConfig{}, errors.New("provider config type assertion failed")
+	}
+	return providerCfg, nil
+}
+
+func loadFile(path string) (any, Result, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, Result{}, err
 	}
 
 	var probe map[string]any
 	if err := yaml.Unmarshal(raw, &probe); err != nil {
-		return Result{}, fmt.Errorf("parse yaml: %w", err)
+		return nil, Result{}, fmt.Errorf("parse yaml: %w", err)
 	}
 
 	if _, ok := probe["provider"]; ok {
 		var cfg ProviderConfig
 		if err := yaml.Unmarshal(raw, &cfg); err != nil {
-			return Result{}, err
+			return nil, Result{}, err
 		}
 		if err := ValidateProvider(cfg); err != nil {
-			return Result{}, err
+			return nil, Result{}, err
 		}
-		return Result{Path: path, Kind: KindProvider}, nil
+		return cfg, Result{Path: path, Kind: KindProvider}, nil
 	}
 
 	if role, _ := probe["node_role"].(string); role == "protected_server" {
 		var cfg AdvancedConfig
 		if err := yaml.Unmarshal(raw, &cfg); err != nil {
-			return Result{}, err
+			return nil, Result{}, err
 		}
 		if err := ValidateAdvanced(cfg); err != nil {
-			return Result{}, err
+			return nil, Result{}, err
 		}
-		return Result{Path: path, Kind: KindAdvanced, Mode: cfg.Mode, Plan: cfg.DeploymentProfile}, nil
+		return cfg, Result{Path: path, Kind: KindAdvanced, Mode: cfg.Mode, Plan: cfg.DeploymentProfile}, nil
 	}
 
 	var cfg TenantConfig
 	if err := yaml.Unmarshal(raw, &cfg); err != nil {
-		return Result{}, err
+		return nil, Result{}, err
 	}
 	if err := ValidateTenant(cfg); err != nil {
-		return Result{}, err
+		return nil, Result{}, err
 	}
-	return Result{Path: path, Kind: KindTenant, Mode: cfg.Mode, Plan: cfg.Plan}, nil
+	return cfg, Result{Path: path, Kind: KindTenant, Mode: cfg.Mode, Plan: cfg.Plan}, nil
 }
 
 func ValidateTenant(cfg TenantConfig) error {
@@ -222,6 +245,28 @@ func ValidateProvider(cfg ProviderConfig) error {
 	}
 	if strings.TrimSpace(cfg.Storage.RootDir) == "" {
 		return errors.New("storage.root_dir is required")
+	}
+	if cfg.Licenses.DefaultGraceDays < 0 {
+		return errors.New("licenses.default_grace_days must not be negative")
+	}
+	if len(cfg.Licenses.Plans) == 0 {
+		return errors.New("licenses.plans must not be empty")
+	}
+	for name, plan := range cfg.Licenses.Plans {
+		if strings.TrimSpace(name) == "" {
+			return errors.New("licenses.plans contains empty plan name")
+		}
+		if len(plan.AllowedModes) == 0 {
+			return fmt.Errorf("licenses.plans.%s.allowed_modes must not be empty", name)
+		}
+		for _, mode := range plan.AllowedModes {
+			if !allowedModes[mode] {
+				return fmt.Errorf("licenses.plans.%s has invalid mode %q", name, mode)
+			}
+		}
+		if len(plan.Features) == 0 {
+			return fmt.Errorf("licenses.plans.%s.features must not be empty", name)
+		}
 	}
 	return nil
 }

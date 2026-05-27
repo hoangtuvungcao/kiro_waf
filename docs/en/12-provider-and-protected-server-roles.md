@@ -49,6 +49,29 @@ Provider private key stays only on this server:
 /etc/kiro-provider/ed25519-private.key
 ```
 
+MVP provider commands:
+
+```text
+kiro-provider --config configs/provider.example.yaml --check
+kiro-provider --config /etc/kiro-provider/provider.yaml gen-dev-keys
+kiro-provider --config /etc/kiro-provider/provider.yaml issue-test-license \
+  --license-id lic_000001 \
+  --customer-id cus_000001 \
+  --server-id srv_000001 \
+  --plan school_smb \
+  --fingerprint-hash sha256:... \
+  --agent-out-dir ./agent-license
+```
+
+`agent-license/` must contain only:
+
+```text
+license.json
+provider-public-key.pem
+```
+
+It must not contain `ed25519-private.key` or any signing key material.
+
 ## Protected server
 
 Run on the customer server.
