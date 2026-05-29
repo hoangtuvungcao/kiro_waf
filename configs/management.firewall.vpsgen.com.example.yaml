@@ -1,0 +1,95 @@
+# Management Server config for firewall.vpsgen.com.
+# This node issues licenses, serves signed updates/revocations, and receives
+# telemetry from protected servers. It must not run customer traffic proxying.
+
+provider:
+  name: VPSGen Firewall Management
+  node_role: provider_license_server
+  public_base_url: https://firewall.vpsgen.com
+  signing_key_file: /etc/kiro-provider/ed25519-private.key
+  public_key_file: /etc/kiro-provider/ed25519-public.key
+  expose_customer_traffic_proxy: false
+
+storage:
+  driver: file
+  root_dir: /var/lib/kiro-provider
+  lock_file: /var/lib/kiro-provider/provider.lock
+  backup_dir: /var/backups/kiro-provider
+  layout:
+    customers: customers
+    licenses: licenses
+    servers: servers
+    activations: activations
+    health: health
+    incidents: incidents
+    updates: updates
+    revocations: revocations
+  jsonl_rotate_monthly: true
+
+licenses:
+  default_grace_days: 7
+  allow_offline_activation: true
+  max_rebinds_per_license_per_month: 1
+  require_support_approval_for_rebind: true
+  plans:
+    community:
+      allowed_modes:
+        - server
+      features:
+        - nftables
+        - basic_xdp
+        - local_cli
+    school_smb:
+      allowed_modes:
+        - server
+        - full
+      features:
+        - xdp
+        - nftables
+        - nginx_generator
+        - waf
+        - bot_defense
+        - cloudflare_origin_lock
+        - signed_updates
+    professional:
+      allowed_modes:
+        - server
+        - full
+      features:
+        - xdp
+        - nftables
+        - nginx_generator
+        - waf
+        - bot_defense
+        - cloudflare_origin_lock
+        - runtime_security
+        - signed_updates
+        - priority_support
+    enterprise_lite:
+      allowed_modes:
+        - server
+        - full
+      features:
+        - xdp
+        - nftables
+        - nginx_generator
+        - waf
+        - bot_defense
+        - cloudflare_origin_lock
+        - runtime_security
+        - signed_updates
+        - local_dashboard
+        - audit_log
+        - staged_rollout
+
+updates:
+  channels:
+    - stable
+    - security
+    - beta
+  require_signed_artifacts: true
+  rollback_retention: 5
+
+support:
+  health_report_retention_days: 180
+  incident_retention_days: 365

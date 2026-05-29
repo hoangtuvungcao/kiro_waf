@@ -38,8 +38,11 @@ server_protection:
   xdp:
     enabled: true
     mode: native # native, generic, offload
+    program_path: /usr/lib/kiro/xdp/kiro_xdp_drop.o
+    section: xdp
     drop_private_source_ip: true
     drop_malformed: true
+    drop_fragments: true
     allowlist_file: /etc/kiro/allowlist.txt
     blocklist_file: /etc/kiro/blocklist.txt
   ddos:
@@ -168,6 +171,9 @@ sites:
         rpm_per_ip: 30
         max_concurrent_per_ip: 2
         cache_seconds: 10
+        # Dùng khi route có false positive đã được xác minh trong lab.
+        # waf_exclude_rules:
+        #   - KIRO-CRS-942-SQLI
       - path: /api/export
         backend_pool: api_pool
         require_auth: true

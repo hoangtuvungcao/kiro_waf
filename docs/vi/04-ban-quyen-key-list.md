@@ -147,3 +147,17 @@ Provider kiểm tra:
 - Server cũ có còn active không.
 - Số lần rebind trong tháng.
 - Có dấu hiệu dùng một license cho nhiều máy không.
+
+## Revoke license
+
+Provider có thể thu hồi license bằng signed revocation list:
+
+```text
+provider-data/revocations/revocations.json
+provider-data/revocations/YYYY-MM.jsonl
+```
+
+Agent chỉ reject license bị revoke khi nhận được revocation list đã ký và chạy
+check với `--license-revocation-list`. Revocation không thay thế rebind: rebind
+dành cho đổi máy hợp lệ, revoke dành cho hủy dịch vụ, gian lận, chargeback, vi
+phạm AUP hoặc rủi ro bảo mật.

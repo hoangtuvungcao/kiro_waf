@@ -23,16 +23,24 @@ jobs:
 
       - name: Go format check
         run: |
-          test -z "$(gofmt -l cmd internal tests)"
+          test -z "$(gofmt -l cmd internal tests master-server client-node)"
 
       - name: Test
         run: go test ./...
+
+      - name: Standalone master/client build
+        run: |
+          go build -o /tmp/kiro-master ./master-server
+          go build -o /tmp/kiro-client-waf ./client-node
+          bash scripts/build-xdp.sh client-node/xdp_filter.c /tmp/xdp_filter.o
 
       - name: Validate JSON examples
         run: |
           python3 -m json.tool examples/license.example.json >/tmp/license.json
           python3 -m json.tool examples/update-manifest.example.json >/tmp/update-manifest.json
           bash -n deployments/lab/firewall-apply-ubuntu-22.04.sh
+          bash -n scripts/ci-phase10-smoke.sh
+          bash -n deploy_master.sh
 
       - name: Config checks
         run: |
@@ -70,3 +78,6 @@ jobs:
           grep 'set_real_ip_from' "$tmpdir/cloudflare-real-ip.conf"
           go run ./cmd/kiro-agent --config configs/tenant.server-only.example.yaml --proxy-dry-run | grep 'proxy disabled in server mode'
           go run ./cmd/kiro-agent --config configs/tenant.full-strict.example.yaml --proxy-dry-run | grep 'listen 443 ssl'
+
+      - name: Phase 10 regression smoke
+        run: bash scripts/ci-phase10-smoke.sh

@@ -2,25 +2,40 @@
 /kiro-agent
 /kiro-cli
 /kiro-provider
+/kiro-master
+/kiro-client-waf
 /bin/
 /dist/
 /build/
+*.o
+*.exe
 
 # Local runtime/state
 /tmp/
 /.cache/
 *.log
 *.pid
+*.db
+*.db-wal
+*.db-shm
 
 # OS/editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 
 # Secrets and local production configs
 *.key
 *.pem
 /provider-data/
 /certs/
+*.env
+!*.example.env
 
+# Test artifacts
+/coverage/
+coverage.out

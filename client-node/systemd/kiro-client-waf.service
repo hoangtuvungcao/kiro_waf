@@ -1,0 +1,25 @@
+[Unit]
+Description=Kiro Client WAF reverse proxy and license heartbeat
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/kiro-client/client.env
+ExecStart=/usr/local/bin/kiro-client-waf
+Restart=always
+RestartSec=3
+User=kiro-client
+Group=kiro-client
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/etc/kiro /etc/kiro-client /var/lib/kiro /var/log/kiro
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+SystemCallArchitectures=native
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

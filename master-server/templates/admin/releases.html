@@ -1,0 +1,50 @@
+{{define "content"}}
+<div class="page-header" style="display:flex; align-items:center; justify-content:space-between;">
+    <div>
+        <h1>Quản lý Phát Hành</h1>
+        <p>Đăng và xóa artifact cập nhật cho các component</p>
+    </div>
+    <a href="/admin/releases/new" class="btn btn-primary">+ Đăng Phát Hành</a>
+</div>
+
+<div class="card">
+    <div class="table-wrap">
+        <table data-sortable>
+            <thead>
+                <tr>
+                    <th data-sort>Component</th>
+                    <th data-sort>Channel</th>
+                    <th data-sort>Version</th>
+                    <th data-sort>Artifact URL</th>
+                    <th>SHA256</th>
+                    <th data-sort>Ngày tạo</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Releases}}
+                <tr>
+                    <td><code>{{.Component}}</code></td>
+                    <td>
+                        {{if eq .Channel "stable"}}<span class="badge badge-active">stable</span>
+                        {{else if eq .Channel "security"}}<span class="badge badge-revoked">security</span>
+                        {{else}}<span class="badge badge-suspended">{{.Channel}}</span>{{end}}
+                    </td>
+                    <td><strong>{{.Version}}</strong></td>
+                    <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{.ArtifactURL}}">{{.ArtifactURL}}</td>
+                    <td><code style="font-size:0.65rem">{{slice .SHA256 0 16}}…</code></td>
+                    <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+                    <td>
+                        <form method="POST" action="/admin/releases/{{.ID}}/delete" style="display:inline">
+                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Xóa phát hành {{.Component}} {{.Version}}?')">Xóa</button>
+                        </form>
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:2rem;">Chưa có phát hành nào. Nhấn "Đăng Phát Hành" để bắt đầu.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}

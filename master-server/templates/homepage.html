@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiro WAF — Dịch Vụ Bảo Vệ Máy Chủ</title>
+<style>
+:root {
+    --bg-primary: #0f1117;
+    --bg-secondary: #1a1d27;
+    --bg-tertiary: #242836;
+    --border-color: #2d3748;
+    --text-primary: #e4e4e7;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+    --accent: #a78bfa;
+    --accent-hover: #8b5cf6;
+    --accent-gradient: linear-gradient(135deg, #7c3aed, #a78bfa);
+    --radius: 8px;
+    --radius-lg: 12px;
+    --shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--accent);
+}
+
+/* Hero */
+.hero {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem;
+}
+.hero-content {
+    max-width: 640px;
+    text-align: center;
+}
+.hero-icon {
+    font-size: 3.5rem;
+    margin-bottom: 1.5rem;
+    display: block;
+}
+.hero-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.hero-desc {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    margin-bottom: 2.5rem;
+    line-height: 1.7;
+}
+
+/* Features */
+.features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+}
+.feature-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+}
+.feature-card .icon {
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+.feature-card h3 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.35rem;
+}
+.feature-card p {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+/* Contact */
+.contact {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+}
+.contact h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+}
+.contact p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+.contact .email {
+    color: var(--accent);
+    font-weight: 500;
+}
+
+/* Footer */
+.footer {
+    border-top: 1px solid var(--border-color);
+    padding: 1.25rem 1.5rem;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .hero { padding: 2rem 1rem; }
+    .hero-title { font-size: 1.5rem; }
+    .hero-desc { font-size: 1rem; }
+    .features { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header class="header">
+    <div class="brand">🛡️ Kiro WAF</div>
+</header>
+<main class="hero">
+    <div class="hero-content">
+        <span class="hero-icon" aria-hidden="true">🛡️</span>
+        <h1 class="hero-title">Bảo Vệ Máy Chủ Toàn Diện</h1>
+        <p class="hero-desc">
+            Kiro WAF cung cấp giải pháp tường lửa ứng dụng web nhiều lớp, 
+            bảo vệ máy chủ của bạn khỏi tấn công DDoS, botnet, flood, 
+            và các mối đe dọa tầng ứng dụng với hiệu suất cao.
+        </p>
+        <div class="features">
+            <div class="feature-card">
+                <span class="icon" aria-hidden="true">⚡</span>
+                <h3>XDP/eBPF</h3>
+                <p>Chặn gói tin độc hại tại kernel, tốc độ line-rate</p>
+            </div>
+            <div class="feature-card">
+                <span class="icon" aria-hidden="true">🔒</span>
+                <h3>JS Challenge</h3>
+                <p>Proof-of-Work xác minh người dùng thật tự động</p>
+            </div>
+            <div class="feature-card">
+                <span class="icon" aria-hidden="true">📊</span>
+                <h3>Rate Limiting</h3>
+                <p>Giới hạn per-IP và per-subnet thông minh</p>
+            </div>
+            <div class="feature-card">
+                <span class="icon" aria-hidden="true">🚀</span>
+                <h3>Hiệu Suất Cao</h3>
+                <p>Không ảnh hưởng tốc độ truy cập hợp lệ</p>
+            </div>
+        </div>
+        <div class="contact">
+            <h2>Liên Hệ</h2>
+            <p>Email: <span class="email">support@vpsgen.com</span></p>
+            <p>Website: firewall.vpsgen.com</p>
+        </div>
+    </div>
+</main>
+<footer class="footer">
+    &copy; 2024 Kiro WAF. Bảo vệ máy chủ của bạn.
+</footer>
+</body>
+</html>

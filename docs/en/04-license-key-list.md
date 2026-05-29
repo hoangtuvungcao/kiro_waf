@@ -53,3 +53,17 @@ For offline activation or support debugging:
 ```text
 kiro-cli license fingerprint --salt default-provider-key-2026
 ```
+
+## License Revocation
+
+The provider can revoke licenses through a signed revocation list:
+
+```text
+provider-data/revocations/revocations.json
+provider-data/revocations/YYYY-MM.jsonl
+```
+
+The agent rejects revoked licenses only when it receives the signed list and is
+run with `--license-revocation-list`. Revocation is separate from rebind: rebind
+is for legitimate server replacement, while revoke is for cancellation, abuse,
+chargeback, AUP violation, or security risk.

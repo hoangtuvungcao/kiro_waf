@@ -1,0 +1,398 @@
+{{define "layout"}}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} — Kiro WAF Admin</title>
+<style>
+:root {
+    --bg-primary: #0f1117;
+    --bg-secondary: #1a1d27;
+    --bg-tertiary: #242836;
+    --border-color: #2d3748;
+    --text-primary: #e4e4e7;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+    --accent: #a78bfa;
+    --accent-hover: #8b5cf6;
+    --accent-gradient: linear-gradient(135deg, #7c3aed, #a78bfa);
+    --success: #34d399;
+    --success-bg: #064e3b;
+    --success-border: #065f46;
+    --danger: #f87171;
+    --danger-bg: #7f1d1d;
+    --danger-border: #991b1b;
+    --warning: #fbbf24;
+    --warning-bg: #78350f;
+    --warning-border: #92400e;
+    --info: #60a5fa;
+    --info-bg: #1e3a5f;
+    --info-border: #1e40af;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+    font-size: 14px;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+/* Navigation */
+.nav {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--accent);
+}
+.nav-links {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+}
+.nav-links a {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius);
+    transition: all 0.2s;
+}
+.nav-links a:hover, .nav-links a.active {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    text-decoration: none;
+}
+.nav-logout {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+.nav-logout:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+/* Main content */
+.container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+.page-header {
+    margin-bottom: 1.5rem;
+}
+.page-header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.page-header p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+/* Flash messages */
+.flash {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.flash-success {
+    background: var(--success-bg);
+    border: 1px solid var(--success-border);
+    color: var(--success);
+}
+.flash-error {
+    background: var(--danger-bg);
+    border: 1px solid var(--danger-border);
+    color: var(--danger);
+}
+.flash-warning {
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    color: var(--warning);
+}
+.flash-info {
+    background: var(--info-bg);
+    border: 1px solid var(--info-border);
+    color: var(--info);
+}
+
+/* Cards */
+.card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    box-shadow: var(--shadow);
+}
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+.card-header h2 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* Grid */
+.grid-4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Stat cards */
+.stat-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+}
+.stat-card .stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+.stat-card .stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.stat-card .stat-sub {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+/* Tables */
+.table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius);
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+thead th {
+    background: var(--bg-tertiary);
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+thead th:hover {
+    color: var(--text-primary);
+}
+thead th.sorted-asc::after { content: " ▲"; font-size: 0.65rem; }
+thead th.sorted-desc::after { content: " ▼"; font-size: 0.65rem; }
+tbody td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+tbody tr:hover {
+    background: var(--bg-tertiary);
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.badge-active { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
+.badge-suspended { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); }
+.badge-revoked { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
+.badge-expired { background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--border-color); }
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.btn-primary {
+    background: var(--accent-gradient);
+    color: #fff;
+}
+.btn-primary:hover { opacity: 0.9; color: #fff; text-decoration: none; }
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.btn-danger {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border: 1px solid var(--danger-border);
+}
+.btn-danger:hover { opacity: 0.9; text-decoration: none; }
+.btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+
+/* Forms */
+.form-group {
+    margin-bottom: 1rem;
+}
+.form-group label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0.35rem;
+}
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+.form-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
+/* Actions dropdown */
+.actions-cell {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .nav { padding: 0.5rem 1rem; flex-wrap: wrap; gap: 0.5rem; }
+    .nav-links { gap: 0.5rem; flex-wrap: wrap; }
+    .container { padding: 1rem; }
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .form-row { grid-template-columns: 1fr; }
+    table { font-size: 0.75rem; }
+    thead th, tbody td { padding: 0.4rem 0.5rem; }
+}
+@media (max-width: 480px) {
+    .grid-4 { grid-template-columns: 1fr; }
+    .nav-links a { font-size: 0.75rem; padding: 0.3rem 0.5rem; }
+}
+</style>
+</head>
+<body>
+<nav class="nav">
+    <div class="nav-brand">🛡️ Kiro WAF</div>
+    <div class="nav-links">
+        <a href="/admin/" {{if eq .Active "dashboard"}}class="active"{{end}}>Tổng quan</a>
+        <a href="/admin/licenses" {{if eq .Active "licenses"}}class="active"{{end}}>License</a>
+        <a href="/admin/releases" {{if eq .Active "releases"}}class="active"{{end}}>Phát hành</a>
+        <a href="/admin/heartbeats" {{if eq .Active "heartbeats"}}class="active"{{end}}>Heartbeat</a>
+        <form method="POST" action="/admin/logout" style="display:inline">
+            <button type="submit" class="nav-logout">Đăng xuất</button>
+        </form>
+    </div>
+</nav>
+<div class="container">
+    {{if .FlashSuccess}}<div class="flash flash-success">✓ {{.FlashSuccess}}</div>{{end}}
+    {{if .FlashError}}<div class="flash flash-error">✗ {{.FlashError}}</div>{{end}}
+    {{if .FlashWarning}}<div class="flash flash-warning">⚠ {{.FlashWarning}}</div>{{end}}
+    {{if .FlashInfo}}<div class="flash flash-info">ℹ {{.FlashInfo}}</div>{{end}}
+    {{template "content" .}}
+</div>
+<script>
+// Sortable tables
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('table[data-sortable]').forEach(function(table) {
+        var headers = table.querySelectorAll('thead th[data-sort]');
+        headers.forEach(function(th, idx) {
+            th.addEventListener('click', function() {
+                var tbody = table.querySelector('tbody');
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                var dir = th.classList.contains('sorted-asc') ? 'desc' : 'asc';
+                headers.forEach(function(h) { h.classList.remove('sorted-asc', 'sorted-desc'); });
+                th.classList.add('sorted-' + dir);
+                rows.sort(function(a, b) {
+                    var aVal = a.cells[idx].textContent.trim();
+                    var bVal = b.cells[idx].textContent.trim();
+                    if (!isNaN(aVal) && !isNaN(bVal)) {
+                        return dir === 'asc' ? aVal - bVal : bVal - aVal;
+                    }
+                    return dir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                });
+                rows.forEach(function(row) { tbody.appendChild(row); });
+            });
+        });
+    });
+});
+</script>
+</body>
+</html>{{end}}

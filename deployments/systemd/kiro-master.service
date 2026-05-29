@@ -1,0 +1,54 @@
+[Unit]
+Description=Kiro WAF Master Server - License management, admin panel, and update distribution
+Documentation=https://firewall.vpsgen.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/kiro-master
+EnvironmentFile=/etc/kiro-master/master.env
+WorkingDirectory=/var/lib/kiro-master
+
+# Health check: verify the service is responding after start
+ExecStartPost=/bin/sh -c 'for i in 1 2 3 4 5; do sleep 2; curl -sf http://127.0.0.1:8080/healthz && exit 0; done; exit 1'
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# User and group
+User=kiro-master
+Group=kiro-master
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=true
+LockPersonality=true
+
+# File system access
+ReadWritePaths=/var/lib/kiro-master
+ReadOnlyPaths=/etc/kiro-master
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=512
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kiro-master
+
+[Install]
+WantedBy=multi-user.target

@@ -101,6 +101,9 @@ func TestLoadRuntimeExpandsAdvancedConfig(t *testing.T) {
 	if !cfg.Firewall.Enabled || !cfg.Firewall.SSHAdminOnly {
 		t.Fatal("expected advanced runtime firewall settings")
 	}
+	if !cfg.XDP.Enabled || cfg.XDP.Mode != "native" || cfg.XDP.ProgramPath != "/usr/lib/kiro/xdp/kiro_xdp_drop.o" || cfg.XDP.Section != "xdp" {
+		t.Fatalf("unexpected runtime XDP config: %#v", cfg.XDP)
+	}
 	if !cfg.CFOriginLock.Enabled || cfg.CFOriginLock.IPv4File == "" || cfg.CFOriginLock.IPv6File == "" {
 		t.Fatal("expected advanced runtime cloudflare origin lock settings")
 	}
@@ -112,6 +115,65 @@ func TestLoadRuntimeExpandsAdvancedConfig(t *testing.T) {
 	}
 	if cfg.Safety.RollbackTimerSeconds != 60 {
 		t.Fatalf("rollback timer = %d, want 60", cfg.Safety.RollbackTimerSeconds)
+	}
+	if !cfg.WAF.Enabled || cfg.WAF.Engine != "coraza" || !cfg.WAF.OWASPCRS || cfg.WAF.AnomalyThreshold != 5 {
+		t.Fatalf("unexpected runtime WAF config: %#v", cfg.WAF)
+	}
+	if !cfg.Bot.Enabled || !cfg.Bot.CookieChallenge || cfg.Bot.ScoreChallenge != 50 || cfg.Bot.ScoreBlock != 80 {
+		t.Fatalf("unexpected runtime bot config: %#v", cfg.Bot)
+	}
+	if !cfg.ResourceGovernor.Enabled {
+		t.Fatal("expected advanced resource governor to be enabled")
+	}
+	if cfg.ResourceGovernor.Hysteresis.CooldownSeconds != 600 {
+		t.Fatalf("governor cooldown = %d, want 600", cfg.ResourceGovernor.Hysteresis.CooldownSeconds)
+	}
+	if cfg.ResourceGovernor.Levels.Attack.ConntrackPercent != 75 {
+		t.Fatalf("governor attack conntrack = %.1f, want 75.0", cfg.ResourceGovernor.Levels.Attack.ConntrackPercent)
+	}
+	if !cfg.Updates.Enabled || cfg.Updates.Channel != "stable" || cfg.Updates.ManifestURL == "" || !cfg.Updates.RequireSignedManifest {
+		t.Fatalf("unexpected runtime update config: %#v", cfg.Updates)
+	}
+	if !cfg.RuntimeSecurity.Enabled || !cfg.RuntimeSecurity.FileIntegrityEnabled || len(cfg.RuntimeSecurity.FileIntegrityPaths) == 0 {
+		t.Fatalf("unexpected runtime security config: %#v", cfg.RuntimeSecurity)
+	}
+	if !cfg.Telemetry.HealthReportEnabled || !cfg.Telemetry.Privacy.RedactSecrets || cfg.Telemetry.Privacy.SendCookie {
+		t.Fatalf("unexpected telemetry privacy config: %#v", cfg.Telemetry)
+	}
+}
+
+func TestLoadRuntimeMapsTenantAutoAttackModeToGovernor(t *testing.T) {
+	cfg, err := LoadRuntimeFile("../../../configs/tenant.server-only.example.yaml")
+	if err != nil {
+		t.Fatalf("load runtime: %v", err)
+	}
+	if !cfg.ResourceGovernor.Enabled {
+		t.Fatal("expected tenant auto_attack_mode to enable resource governor")
+	}
+	if cfg.WAF.Enabled {
+		t.Fatalf("server-only tenant should not enable WAF: %#v", cfg.WAF)
+	}
+	if cfg.ResourceGovernor.Baseline.StoreFile != "/var/lib/kiro/baseline/baseline.json" {
+		t.Fatalf("baseline store = %q", cfg.ResourceGovernor.Baseline.StoreFile)
+	}
+	if !cfg.Updates.Enabled || cfg.Updates.Channel != "stable" || !cfg.Updates.RequireSignedManifest {
+		t.Fatalf("unexpected tenant update config: %#v", cfg.Updates)
+	}
+}
+
+func TestLoadRuntimeMapsTenantWebDefenseDefaults(t *testing.T) {
+	cfg, err := LoadRuntimeFile("../../../configs/tenant.full-cloudflare.example.yaml")
+	if err != nil {
+		t.Fatalf("load runtime: %v", err)
+	}
+	if !cfg.WAF.Enabled || cfg.WAF.Engine != "coraza" || cfg.WAF.AnomalyThreshold != 5 {
+		t.Fatalf("unexpected tenant WAF config: %#v", cfg.WAF)
+	}
+	if !cfg.Bot.Enabled || !cfg.Bot.CookieChallenge || cfg.Bot.ChallengeCookieName != "kiro_challenge" {
+		t.Fatalf("unexpected tenant bot config: %#v", cfg.Bot)
+	}
+	if len(cfg.Bot.TrustedClientCIDRs) != 1 || cfg.Bot.TrustedClientCIDRs[0] != "203.0.113.10/32" {
+		t.Fatalf("trusted client CIDRs = %#v", cfg.Bot.TrustedClientCIDRs)
 	}
 }
 
@@ -175,6 +237,24 @@ func TestValidateAdvancedRequiresLicenseFilesWhenEnforced(t *testing.T) {
 	}
 	if err := ValidateAdvanced(cfg); err == nil {
 		t.Fatal("expected missing enforced license files to fail")
+	}
+}
+
+func TestValidateAdvancedRejectsInvalidXDPMode(t *testing.T) {
+	cfg := AdvancedConfig{
+		Mode:              "server",
+		DeploymentProfile: "school_smb",
+		NodeRole:          "protected_server",
+		ServerProtection: ServerProtection{
+			XDP: AdvancedXDP{Enabled: true, Mode: "bad"},
+		},
+		BackendPools: []BackendPool{{
+			ID:        "known",
+			Upstreams: []Upstream{{ID: "upstream", URL: "http://127.0.0.1:3000"}},
+		}},
+	}
+	if err := ValidateAdvanced(cfg); err == nil {
+		t.Fatal("expected invalid XDP mode to fail")
 	}
 }
 

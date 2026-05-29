@@ -1,0 +1,20 @@
+[Unit]
+Description=Kiro Firewall Management Provider API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/kiro-provider/api.env
+ExecStart=/usr/local/bin/kiro-provider --config /etc/kiro-provider/provider.yaml serve-api --listen 127.0.0.1:8080 --auth-token-scope ${KIRO_PROVIDER_ADMIN_TOKEN}=* --rate-limit-per-minute ${KIRO_PROVIDER_RATE_LIMIT_PER_MINUTE}
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/kiro-provider /var/backups/kiro-provider /etc/kiro-provider
+
+[Install]
+WantedBy=multi-user.target

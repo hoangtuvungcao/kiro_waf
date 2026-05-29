@@ -22,6 +22,24 @@ type File struct {
 	Signature string  `json:"signature"`
 }
 
+type RevocationListFile struct {
+	Payload   RevocationListPayload `json:"payload"`
+	Signature string                `json:"signature"`
+}
+
+type RevocationListPayload struct {
+	GeneratedAt string           `json:"generated_at"`
+	Revoked     []RevokedLicense `json:"revoked"`
+}
+
+type RevokedLicense struct {
+	LicenseID  string `json:"license_id"`
+	CustomerID string `json:"customer_id,omitempty"`
+	ServerID   string `json:"server_id,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+	RevokedAt  string `json:"revoked_at"`
+}
+
 type Payload struct {
 	LicenseID           string         `json:"license_id"`
 	CustomerID          string         `json:"customer_id"`
@@ -47,6 +65,7 @@ type Options struct {
 	RequiredMode           string
 	RequiredFeatures       []string
 	MachineFingerprintHash string
+	RevocationListPath     string
 	DisableGracePeriod     bool
 	Now                    time.Time
 }
@@ -132,6 +151,11 @@ func Verify(file File, publicKey ed25519.PublicKey, opts Options) (Result, error
 	if err := verifySignature(file, publicKey); err != nil {
 		return Result{}, err
 	}
+	if opts.RevocationListPath != "" {
+		if err := VerifyLicenseNotRevokedFile(file.Payload.LicenseID, opts.RevocationListPath, publicKey, opts.Now); err != nil {
+			return Result{}, err
+		}
+	}
 	if opts.RequiredMode != "" && !has(file.Payload.Modes, opts.RequiredMode) {
 		return Result{}, errors.New("license does not allow requested mode")
 	}
@@ -178,6 +202,117 @@ func CanonicalPayload(payload Payload) ([]byte, error) {
 }
 
 func CanonicalLicenseFile(file File) ([]byte, error) {
+	return json.MarshalIndent(file, "", "  ")
+}
+
+func SignRevocationList(payload RevocationListPayload, privateKey ed25519.PrivateKey) (RevocationListFile, error) {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return RevocationListFile{}, fmt.Errorf("ed25519 private key must be %d bytes", ed25519.PrivateKeySize)
+	}
+	if err := ValidateRevocationListPayload(payload); err != nil {
+		return RevocationListFile{}, err
+	}
+	canonical, err := CanonicalRevocationListPayload(payload)
+	if err != nil {
+		return RevocationListFile{}, err
+	}
+	return RevocationListFile{
+		Payload:   payload,
+		Signature: EncodeSignature(ed25519.Sign(privateKey, canonical)),
+	}, nil
+}
+
+func VerifyRevocationListFile(path string, publicKey ed25519.PublicKey) (RevocationListPayload, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return RevocationListPayload{}, err
+	}
+	var file RevocationListFile
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return RevocationListPayload{}, err
+	}
+	return VerifyRevocationList(file, publicKey)
+}
+
+func VerifyRevocationList(file RevocationListFile, publicKey ed25519.PublicKey) (RevocationListPayload, error) {
+	if len(publicKey) != ed25519.PublicKeySize {
+		return RevocationListPayload{}, fmt.Errorf("ed25519 public key must be %d bytes", ed25519.PublicKeySize)
+	}
+	if err := ValidateRevocationListPayload(file.Payload); err != nil {
+		return RevocationListPayload{}, err
+	}
+	signatureText := strings.TrimSpace(file.Signature)
+	if !strings.HasPrefix(signatureText, signaturePrefix) {
+		return RevocationListPayload{}, errors.New("revocation list signature must use ed25519:<base64> format")
+	}
+	signature, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(signatureText, signaturePrefix))
+	if err != nil {
+		return RevocationListPayload{}, err
+	}
+	canonical, err := CanonicalRevocationListPayload(file.Payload)
+	if err != nil {
+		return RevocationListPayload{}, err
+	}
+	if !ed25519.Verify(publicKey, canonical, signature) {
+		return RevocationListPayload{}, errors.New("revocation list signature verification failed")
+	}
+	return file.Payload, nil
+}
+
+func VerifyLicenseNotRevokedFile(licenseID string, revocationListPath string, publicKey ed25519.PublicKey, now time.Time) error {
+	payload, err := VerifyRevocationListFile(revocationListPath, publicKey)
+	if err != nil {
+		return err
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	for _, revoked := range payload.Revoked {
+		if revoked.LicenseID != licenseID {
+			continue
+		}
+		revokedAt, err := time.Parse(time.RFC3339, revoked.RevokedAt)
+		if err != nil {
+			return fmt.Errorf("invalid revocation revoked_at: %w", err)
+		}
+		if !revokedAt.After(now) {
+			return errors.New("license is revoked")
+		}
+	}
+	return nil
+}
+
+func ValidateRevocationListPayload(payload RevocationListPayload) error {
+	if strings.TrimSpace(payload.GeneratedAt) == "" {
+		return errors.New("revocation list generated_at is required")
+	}
+	if _, err := time.Parse(time.RFC3339, payload.GeneratedAt); err != nil {
+		return fmt.Errorf("revocation list generated_at invalid: %w", err)
+	}
+	seen := map[string]bool{}
+	for i, revoked := range payload.Revoked {
+		if strings.TrimSpace(revoked.LicenseID) == "" {
+			return fmt.Errorf("revocation list revoked[%d].license_id is required", i)
+		}
+		if seen[revoked.LicenseID] {
+			return fmt.Errorf("revocation list duplicate license_id %q", revoked.LicenseID)
+		}
+		seen[revoked.LicenseID] = true
+		if strings.TrimSpace(revoked.RevokedAt) == "" {
+			return fmt.Errorf("revocation list revoked[%d].revoked_at is required", i)
+		}
+		if _, err := time.Parse(time.RFC3339, revoked.RevokedAt); err != nil {
+			return fmt.Errorf("revocation list revoked[%d].revoked_at invalid: %w", i, err)
+		}
+	}
+	return nil
+}
+
+func CanonicalRevocationListPayload(payload RevocationListPayload) ([]byte, error) {
+	return json.Marshal(payload)
+}
+
+func CanonicalRevocationListFile(file RevocationListFile) ([]byte, error) {
 	return json.MarshalIndent(file, "", "  ")
 }
 

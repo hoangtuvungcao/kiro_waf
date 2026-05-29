@@ -1,0 +1,69 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Tổng quan hệ thống</h1>
+    <p>Trạng thái tổng quát của hệ thống Kiro WAF</p>
+</div>
+
+<div class="grid-4">
+    <div class="stat-card">
+        <div class="stat-label">Tổng License</div>
+        <div class="stat-value">{{.Stats.TotalLicenses}}</div>
+        <div class="stat-sub">{{.Stats.ActiveLicenses}} đang hoạt động</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Node Hoạt Động</div>
+        <div class="stat-value">{{.Stats.ActiveNodes}}</div>
+        <div class="stat-sub">Heartbeat trong 5 phút qua</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Heartbeat Gần Đây</div>
+        <div class="stat-value">{{.Stats.RecentHeartbeats}}</div>
+        <div class="stat-sub">Trong 1 giờ qua</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Tình Trạng Hệ Thống</div>
+        <div class="stat-value" style="color: {{if eq .Stats.SystemStatus "healthy"}}var(--success){{else if eq .Stats.SystemStatus "degraded"}}var(--warning){{else}}var(--danger){{end}}">
+            {{if eq .Stats.SystemStatus "healthy"}}Tốt{{else if eq .Stats.SystemStatus "degraded"}}Cảnh báo{{else}}Lỗi{{end}}
+        </div>
+        <div class="stat-sub">{{.Stats.SystemStatusDetail}}</div>
+    </div>
+</div>
+
+<div class="grid-4" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+    <div class="card">
+        <div class="card-header">
+            <h2>License theo trạng thái</h2>
+        </div>
+        <table>
+            <tbody>
+                <tr><td>Hoạt động</td><td style="text-align:right"><span class="badge badge-active">{{.Stats.ActiveLicenses}}</span></td></tr>
+                <tr><td>Tạm ngưng</td><td style="text-align:right"><span class="badge badge-suspended">{{.Stats.SuspendedLicenses}}</span></td></tr>
+                <tr><td>Thu hồi</td><td style="text-align:right"><span class="badge badge-revoked">{{.Stats.RevokedLicenses}}</span></td></tr>
+                <tr><td>Hết hạn</td><td style="text-align:right"><span class="badge badge-expired">{{.Stats.ExpiredLicenses}}</span></td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <h2>Heartbeat gần đây</h2>
+            <a href="/admin/heartbeats" class="btn btn-secondary btn-sm">Xem tất cả</a>
+        </div>
+        {{if .RecentHeartbeats}}
+        <table>
+            <thead><tr><th>Node</th><th>IP</th><th>Thời gian</th></tr></thead>
+            <tbody>
+                {{range .RecentHeartbeats}}
+                <tr>
+                    <td>{{.NodeID}}</td>
+                    <td>{{.ClientIP}}</td>
+                    <td>{{.CreatedAt.Format "15:04:05"}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p style="color: var(--text-muted); font-size: 0.8125rem;">Chưa có heartbeat nào.</p>
+        {{end}}
+    </div>
+</div>
+{{end}}

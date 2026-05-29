@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -117,6 +118,54 @@ func TestVerifyRejectsExpiredBeyondGrace(t *testing.T) {
 	}
 }
 
+func TestVerifyRejectsRevokedLicense(t *testing.T) {
+	payload := testPayload()
+	payload.LicenseID = "lic_revoked"
+	file, publicKey, privateKey := signedTestLicenseWithKeys(t, payload)
+	revocations, err := SignRevocationList(RevocationListPayload{
+		GeneratedAt: "2026-05-28T00:00:00Z",
+		Revoked: []RevokedLicense{{
+			LicenseID: "lic_revoked",
+			Reason:    "non-payment",
+			RevokedAt: "2026-05-28T00:00:00Z",
+		}},
+	}, privateKey)
+	if err != nil {
+		t.Fatalf("sign revocations: %v", err)
+	}
+	dir := t.TempDir()
+	revocationPath := filepath.Join(dir, "revocations.json")
+	writeRevocationList(t, revocationPath, revocations)
+	_, err = Verify(file, publicKey, Options{
+		RevocationListPath: revocationPath,
+		Now:                time.Date(2026, 5, 29, 0, 0, 0, 0, time.UTC),
+	})
+	if err == nil || !strings.Contains(err.Error(), "revoked") {
+		t.Fatalf("error = %v, want revoked", err)
+	}
+}
+
+func TestVerifyRevocationListRejectsBadSignature(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	file, err := SignRevocationList(RevocationListPayload{
+		GeneratedAt: "2026-05-28T00:00:00Z",
+		Revoked: []RevokedLicense{{
+			LicenseID: "lic_revoked",
+			RevokedAt: "2026-05-28T00:00:00Z",
+		}},
+	}, privateKey)
+	if err != nil {
+		t.Fatalf("sign revocations: %v", err)
+	}
+	file.Payload.Revoked[0].LicenseID = "lic_tampered"
+	if _, err := VerifyRevocationList(file, publicKey); err == nil {
+		t.Fatal("expected tampered revocation list to fail")
+	}
+}
+
 func TestVerifyFileLoadsPEMPublicKey(t *testing.T) {
 	file, publicKey, privateKey := signedTestLicenseWithKeys(t, testPayload())
 	_ = privateKey
@@ -194,6 +243,17 @@ func writeJSON(t *testing.T, path string, value File) {
 	}
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		t.Fatalf("write license: %v", err)
+	}
+}
+
+func writeRevocationList(t *testing.T, path string, value RevocationListFile) {
+	t.Helper()
+	raw, err := CanonicalRevocationListFile(value)
+	if err != nil {
+		t.Fatalf("marshal revocations: %v", err)
+	}
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write revocations: %v", err)
 	}
 }
 

@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	allowedModes    = map[string]bool{"server": true, "full": true}
-	allowedProfiles = map[string]bool{"light": true, "balanced": true, "strict": true, "lockdown": true}
-	allowedTLSModes = map[string]bool{"flexible_http": true, "full_tls": true, "full_strict": true}
+	allowedModes      = map[string]bool{"server": true, "full": true}
+	allowedProfiles   = map[string]bool{"light": true, "balanced": true, "strict": true, "lockdown": true}
+	allowedTLSModes   = map[string]bool{"flexible_http": true, "full_tls": true, "full_strict": true}
+	allowedWAFEngines = map[string]bool{"coraza": true, "modsecurity": true}
 )
 
 func CheckFile(path string) (Result, error) {
@@ -180,6 +181,27 @@ func ValidateAdvanced(cfg AdvancedConfig) error {
 	if cfg.Safety.RollbackTimerSeconds < 0 {
 		return errors.New("safety.rollback_timer_seconds must not be negative")
 	}
+	if err := validateResourceGovernor(cfg.ResourceGovernor); err != nil {
+		return err
+	}
+	if err := validateAdvancedXDP(cfg.ServerProtection.XDP); err != nil {
+		return err
+	}
+	if err := validateServerDDOS(cfg.ServerProtection.DDOS); err != nil {
+		return err
+	}
+	if err := validateWebsiteDefense(cfg.WebsiteProtection); err != nil {
+		return err
+	}
+	if err := validateAdvancedUpdates(cfg.Updates); err != nil {
+		return err
+	}
+	if err := validateAdvancedRuntimeSecurity(cfg.RuntimeSecurity); err != nil {
+		return err
+	}
+	if err := validateAdvancedTelemetry(cfg.Telemetry); err != nil {
+		return err
+	}
 	for _, port := range cfg.ServerProtection.Nftables.AllowPorts {
 		if port <= 0 || port > 65535 {
 			return fmt.Errorf("server_protection.nftables.allow_ports contains invalid port %d", port)
@@ -294,6 +316,15 @@ func ValidateProvider(cfg ProviderConfig) error {
 			return fmt.Errorf("licenses.plans.%s.features must not be empty", name)
 		}
 	}
+	if cfg.Updates.RollbackRetention < 0 {
+		return errors.New("updates.rollback_retention must not be negative")
+	}
+	for _, channel := range cfg.Updates.Channels {
+		channel = strings.TrimSpace(channel)
+		if channel == "" {
+			return errors.New("updates.channels contains empty channel")
+		}
+	}
 	return nil
 }
 
@@ -310,6 +341,167 @@ func validateBackendURL(raw string) error {
 	}
 	if u.Host == "" {
 		return errors.New("backend URL host is required")
+	}
+	return nil
+}
+
+func validateResourceGovernor(cfg ResourceGovernorConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	if cfg.Baseline.LearningDays < 0 {
+		return errors.New("resource_governor.baseline.learning_days must not be negative")
+	}
+	if cfg.Baseline.MinSamples < 0 {
+		return errors.New("resource_governor.baseline.min_samples must not be negative")
+	}
+	if cfg.Hysteresis.MinLevelHoldSeconds < 0 {
+		return errors.New("resource_governor.hysteresis.min_level_hold_seconds must not be negative")
+	}
+	if cfg.Hysteresis.CooldownSeconds < 0 {
+		return errors.New("resource_governor.hysteresis.cooldown_seconds must not be negative")
+	}
+	if cfg.Hysteresis.RequireRecoverySamples < 0 {
+		return errors.New("resource_governor.hysteresis.require_recovery_samples must not be negative")
+	}
+	if err := validateGovernorThreshold("elevated", cfg.Levels.Elevated); err != nil {
+		return err
+	}
+	if err := validateGovernorThreshold("attack", cfg.Levels.Attack); err != nil {
+		return err
+	}
+	if err := validateGovernorThreshold("lockdown", cfg.Levels.Lockdown); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateWebsiteDefense(cfg WebsiteProtection) error {
+	if cfg.WAF.Enabled {
+		if strings.TrimSpace(cfg.WAF.Engine) == "" {
+			return errors.New("website_protection.waf.engine is required when WAF is enabled")
+		}
+		if !allowedWAFEngines[cfg.WAF.Engine] {
+			return fmt.Errorf("website_protection.waf.engine must be coraza or modsecurity, got %q", cfg.WAF.Engine)
+		}
+		if cfg.WAF.AnomalyThreshold < 0 {
+			return errors.New("website_protection.waf.anomaly_threshold must not be negative")
+		}
+	}
+	if cfg.Bot.ScoreChallenge < 0 || cfg.Bot.ScoreChallenge > 100 {
+		return errors.New("website_protection.bot.score_challenge must be between 0 and 100")
+	}
+	if cfg.Bot.ScoreBlock < 0 || cfg.Bot.ScoreBlock > 100 {
+		return errors.New("website_protection.bot.score_block must be between 0 and 100")
+	}
+	if cfg.Bot.Enabled && cfg.Bot.ScoreBlock > 0 && cfg.Bot.ScoreChallenge > cfg.Bot.ScoreBlock {
+		return errors.New("website_protection.bot.score_challenge must be less than or equal to score_block")
+	}
+	return nil
+}
+
+func validateAdvancedXDP(cfg AdvancedXDP) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	switch strings.TrimSpace(cfg.Mode) {
+	case "", "generic", "native", "offload":
+	default:
+		return fmt.Errorf("server_protection.xdp.mode must be generic, native, or offload, got %q", cfg.Mode)
+	}
+	if strings.TrimSpace(cfg.Section) != "" && strings.ContainsAny(cfg.Section, " \t\n\r/") {
+		return errors.New("server_protection.xdp.section must be a simple ELF section name")
+	}
+	for _, path := range []struct {
+		name  string
+		value string
+	}{
+		{"program_path", cfg.ProgramPath},
+		{"allowlist_file", cfg.AllowlistFile},
+		{"blocklist_file", cfg.BlocklistFile},
+	} {
+		if strings.Contains(path.value, "\x00") {
+			return fmt.Errorf("server_protection.xdp.%s contains NUL byte", path.name)
+		}
+	}
+	return nil
+}
+
+func validateServerDDOS(cfg ServerDDOS) error {
+	if cfg.PerIPPPS < 0 ||
+		cfg.PerSubnet24PPS < 0 ||
+		cfg.SynPerIPPerSecond < 0 ||
+		cfg.UDPPerIPPerSecond < 0 ||
+		cfg.ICMPPerIPPerSecond < 0 ||
+		cfg.TemporaryBlockSeconds < 0 ||
+		cfg.GreylistSeconds < 0 {
+		return errors.New("server_protection.ddos thresholds must not be negative")
+	}
+	return nil
+}
+
+func validateAdvancedUpdates(cfg AdvancedUpdates) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(cfg.Channel) == "" {
+		return errors.New("updates.channel is required when updates are enabled")
+	}
+	if strings.TrimSpace(cfg.ManifestURL) == "" {
+		return errors.New("updates.manifest_url is required when updates are enabled")
+	}
+	return nil
+}
+
+func validateAdvancedRuntimeSecurity(cfg AdvancedRuntimeSecurity) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	if cfg.FileIntegrity.Enabled && len(cfg.FileIntegrity.Paths) == 0 {
+		return errors.New("runtime_security.file_integrity.paths must not be empty when file integrity is enabled")
+	}
+	for _, path := range cfg.FileIntegrity.Paths {
+		if strings.TrimSpace(path) == "" {
+			return errors.New("runtime_security.file_integrity.paths contains empty path")
+		}
+	}
+	for _, name := range cfg.AlertWhenWebUserExecutes {
+		if strings.TrimSpace(name) == "" {
+			return errors.New("runtime_security.alert_when_web_user_executes contains empty process name")
+		}
+	}
+	return nil
+}
+
+func validateAdvancedTelemetry(cfg AdvancedTelemetry) error {
+	if cfg.HealthReport.SendIntervalSeconds < 0 {
+		return errors.New("telemetry.health_report.send_interval_seconds must not be negative")
+	}
+	return nil
+}
+
+func validateGovernorThreshold(name string, threshold ResourceGovernorLevelThreshold) error {
+	if err := validatePercent("cpu_percent", threshold.CPUPercent); err != nil {
+		return fmt.Errorf("resource_governor.levels.%s.%w", name, err)
+	}
+	if err := validatePercent("ram_available_percent", threshold.RAMAvailablePercent); err != nil {
+		return fmt.Errorf("resource_governor.levels.%s.%w", name, err)
+	}
+	if threshold.Load1 < 0 {
+		return fmt.Errorf("resource_governor.levels.%s.load1 must not be negative", name)
+	}
+	if err := validatePercent("conntrack_percent", threshold.ConntrackPercent); err != nil {
+		return fmt.Errorf("resource_governor.levels.%s.%w", name, err)
+	}
+	if threshold.BackendLatencyMS < 0 {
+		return fmt.Errorf("resource_governor.levels.%s.backend_latency_ms must not be negative", name)
+	}
+	return nil
+}
+
+func validatePercent(name string, value float64) error {
+	if value < 0 || value > 100 {
+		return fmt.Errorf("%s must be between 0 and 100", name)
 	}
 	return nil
 }

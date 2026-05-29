@@ -1,0 +1,35 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Heartbeat Log</h1>
+    <p>Bản ghi heartbeat từ các client node — sắp xếp bằng cách nhấn vào tiêu đề cột</p>
+</div>
+
+<div class="card">
+    <div class="table-wrap">
+        <table data-sortable>
+            <thead>
+                <tr>
+                    <th data-sort>Thời gian</th>
+                    <th data-sort>Node ID</th>
+                    <th data-sort>License ID</th>
+                    <th data-sort>IP</th>
+                    <th data-sort>Trạng thái</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Heartbeats}}
+                <tr>
+                    <td>{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+                    <td><code>{{.NodeID}}</code></td>
+                    <td><code style="font-size:0.7rem">{{.LicenseID}}</code></td>
+                    <td>{{.ClientIP}}</td>
+                    <td><span class="badge badge-active">OK</span></td>
+                </tr>
+                {{else}}
+                <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:2rem;">Chưa có heartbeat nào được ghi nhận.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}

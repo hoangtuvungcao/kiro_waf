@@ -1,0 +1,68 @@
+{{define "content"}}
+<div class="page-header" style="display:flex; align-items:center; justify-content:space-between;">
+    <div>
+        <h1>Quản lý License</h1>
+        <p>Tạo, sửa, gia hạn, xoay key, thu hồi, và xóa license</p>
+    </div>
+    <a href="/admin/licenses/new" class="btn btn-primary">+ Tạo License</a>
+</div>
+
+<div class="card">
+    <div class="table-wrap">
+        <table data-sortable>
+            <thead>
+                <tr>
+                    <th data-sort>License ID</th>
+                    <th data-sort>Khách hàng</th>
+                    <th data-sort>Gói</th>
+                    <th data-sort>Trạng thái</th>
+                    <th data-sort>IP</th>
+                    <th data-sort>Hết hạn</th>
+                    <th data-sort>Heartbeat cuối</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Licenses}}
+                <tr>
+                    <td><code style="font-size:0.75rem">{{.LicenseID}}</code></td>
+                    <td>{{.CustomerName}}</td>
+                    <td>{{.Plan}}</td>
+                    <td>
+                        <span class="badge badge-{{.Status}}">{{.Status}}</span>
+                    </td>
+                    <td>{{.ClientIP}}</td>
+                    <td>{{.ExpiresAt.Format "2006-01-02"}}</td>
+                    <td>{{if .LastHeartbeat.IsZero}}-{{else}}{{.LastHeartbeat.Format "01-02 15:04"}}{{end}}</td>
+                    <td>
+                        <div class="actions-cell">
+                            <a href="/admin/licenses/{{.ID}}/edit" class="btn btn-secondary btn-sm">Sửa</a>
+                            <form method="POST" action="/admin/licenses/{{.ID}}/renew" style="display:inline">
+                                <button type="submit" class="btn btn-secondary btn-sm">Gia hạn</button>
+                            </form>
+                            <form method="POST" action="/admin/licenses/{{.ID}}/rotate" style="display:inline">
+                                <button type="submit" class="btn btn-secondary btn-sm">Xoay key</button>
+                            </form>
+                            {{if eq .Status "active"}}
+                            <form method="POST" action="/admin/licenses/{{.ID}}/revoke" style="display:inline">
+                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Thu hồi license này?')">Thu hồi</button>
+                            </form>
+                            {{else}}
+                            <form method="POST" action="/admin/licenses/{{.ID}}/activate" style="display:inline">
+                                <button type="submit" class="btn btn-secondary btn-sm">Kích hoạt</button>
+                            </form>
+                            {{end}}
+                            <form method="POST" action="/admin/licenses/{{.ID}}/delete" style="display:inline">
+                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Xóa vĩnh viễn license này?')">Xóa</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:2rem;">Chưa có license nào. Nhấn "Tạo License" để bắt đầu.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}
