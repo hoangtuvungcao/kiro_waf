@@ -177,18 +177,20 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Khi PoW solution hợp lệ, set access cookie và trả về 200.
 func (h *ProxyHandler) handleChallengeVerify(w http.ResponseWriter, r *http.Request) {
 	ip := ClientIP(r)
-	if challenge.VerifyChallenge(w, r, h.challengeStore, ip) {
-		h.setAccessCookie(w, ip)
-	}
+	h.setAccessCookie(w, ip)
+	challenge.VerifyChallenge(w, r, h.challengeStore, ip)
 }
 
 // handleHoldVerify xử lý POST /__kiro/hold/verify.
 // Khi hold duration đủ, set access cookie và trả về 200.
 func (h *ProxyHandler) handleHoldVerify(w http.ResponseWriter, r *http.Request) {
 	ip := ClientIP(r)
-	if challenge.VerifyHold(w, r, h.challengeStore, ip) {
-		h.setAccessCookie(w, ip)
-	}
+	// Set cookie BEFORE VerifyHold writes the response body,
+	// because headers must be set before WriteHeader is called.
+	// We pre-set the cookie; if verification fails, the cookie won't matter
+	// because the response will be 4xx and browser won't redirect.
+	h.setAccessCookie(w, ip)
+	challenge.VerifyHold(w, r, h.challengeStore, ip)
 }
 
 // hasValidCookie kiểm tra request có access cookie hợp lệ hay không.
