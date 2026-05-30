@@ -109,7 +109,7 @@ func Run() int {
 		MasterURL:       cfg.MasterURL,
 		LicenseKey:      cfg.LicenseKey,
 		NodeID:          cfg.NodeID,
-		FingerprintHash: computeBinaryHash(),
+		FingerprintHash: "", // Disabled: binary hash changes on every deploy, causing lockouts
 		Interval:        time.Duration(cfg.HeartbeatSeconds) * time.Second,
 		Stats:           nil,
 	}
