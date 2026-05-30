@@ -259,6 +259,8 @@ func handleAdminLicenseAction(database *db.DB) http.HandlerFunc {
 			adminLicenseSuspend(w, r, database, id)
 		case action == "upgrade" && r.Method == http.MethodPost:
 			adminLicenseUpgrade(w, r, database, id)
+		case action == "edit" && r.Method == http.MethodGet:
+			adminLicenseEditForm(w, r, database, id)
 		case action == "" && r.Method == http.MethodPut:
 			adminLicenseUpdate(w, r, database, id)
 		case action == "" && r.Method == http.MethodPost:

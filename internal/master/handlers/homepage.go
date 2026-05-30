@@ -10,11 +10,14 @@ import (
 // The homepage displays Kiro branding, protection service description, and
 // contact information. It contains NO references to /admin or /api/ endpoints
 // and NO JavaScript that could expose backend information.
+// For non-root paths that don't match any other route, it serves a branded 404 page.
 func HandleHomepage() http.HandlerFunc {
+	notFound := HandleNotFound()
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Only serve the homepage at the exact root path.
+		// Serve branded 404 for any path that isn't exactly "/".
 		if r.URL.Path != "/" {
-			http.NotFound(w, r)
+			notFound(w, r)
 			return
 		}
 
