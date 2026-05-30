@@ -140,10 +140,8 @@ func VerifyTransparent(w http.ResponseWriter, r *http.Request, store *Store, cli
 		return false
 	}
 
-	// Success
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+	// Success — do NOT write response here; caller handles it
+	// so that Set-Cookie header can be added before WriteHeader.
 	return true
 }
 

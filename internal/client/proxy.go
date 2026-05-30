@@ -183,29 +183,16 @@ func (h *ProxyHandler) serveChallengeForLevel(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ProxyHandler) handleTransparentVerify(w http.ResponseWriter, r *http.Request, ip string) {
-	// Set cookie BEFORE VerifyTransparent writes the response headers
-	// This ensures Set-Cookie header is included in the response
-	if r.Method != http.MethodPost {
-		challenge.VerifyTransparent(w, r, h.challengeStore, ip, h.escalationEng)
-		return
-	}
-
-	// Pre-set the cookie header — it will be sent with whatever status code follows
-	h.setAccessCookieV2(w, r, ip)
-
 	success := challenge.VerifyTransparent(w, r, h.challengeStore, ip, h.escalationEng)
 	if success {
+		// Set cookie BEFORE writing response (headers must be set before WriteHeader)
+		h.setAccessCookieV2(w, r, ip)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 		if h.escalationEng != nil {
 			h.escalationEng.RecordSuccess(ip)
 		}
-	} else {
-		// On failure, remove the pre-set cookie by overwriting with expired cookie
-		http.SetCookie(w, &http.Cookie{
-			Name:   "kiro_access",
-			Value:  "",
-			Path:   "/",
-			MaxAge: -1,
-		})
 	}
 }
 
