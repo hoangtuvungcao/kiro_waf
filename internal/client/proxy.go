@@ -1,6 +1,6 @@
-// Package client triển khai reverse proxy handler chính cho Client_WAF.
-// ProxyHandler tích hợp tất cả components: cookie, ratelimit, ban, ua, challenge.
-// Luồng xử lý: check UA → check ban → check cookie → rate limit → challenge/ban/proxy.
+// Package client implements the main reverse proxy handler for Client_WAF.
+// ProxyHandler integrates all components: cookie, ratelimit, ban, ua, challenge,
+// escalation, TLS fingerprint, Cloudflare IP extraction, loop detection.
 package client
 
 import (
@@ -10,46 +10,40 @@ import (
 	"time"
 
 	"kiro_waf/internal/client/ban"
+	"kiro_waf/internal/client/cf"
 	"kiro_waf/internal/client/challenge"
 	"kiro_waf/internal/client/cookie"
+	"kiro_waf/internal/client/escalation"
+	"kiro_waf/internal/client/fingerprint"
 	"kiro_waf/internal/client/ratelimit"
 	"kiro_waf/internal/client/ua"
 )
 
-// ProxyConfig chứa cấu hình cho ProxyHandler.
+// ProxyConfig contains configuration for ProxyHandler.
 type ProxyConfig struct {
-	// BackendURL là URL của backend server để proxy verified requests.
-	BackendURL string
-
-	// CookieSecret là HMAC-SHA256 secret key cho access cookie.
-	CookieSecret []byte
-
-	// CookieTTL là thời gian sống của access cookie.
-	CookieTTL time.Duration
-
-	// Difficulty là số ký tự "0" prefix cho PoW challenge.
-	Difficulty int
-
-	// HoldSeconds là thời gian giữ tối thiểu cho Hold captcha.
-	HoldSeconds int
-
-	// BanDuration là thời gian ban khi IP vượt hard threshold.
-	BanDuration time.Duration
-
-	// ChallengeTTL là thời gian sống của challenge token.
-	ChallengeTTL time.Duration
-
-	// ChallengeAllNew khi true, mọi request không có cookie hợp lệ sẽ bị challenge ngay.
+	BackendURL      string
+	CookieSecret    []byte
+	CookieTTL       time.Duration
+	Difficulty      int
+	HoldSeconds     int
+	BanDuration     time.Duration
+	ChallengeTTL    time.Duration
 	ChallengeAllNew bool
+	TransparentTTL  time.Duration
 }
 
-// ProxyHandler là reverse proxy handler chính cho Client_WAF.
-// Tích hợp tất cả components: cookie, ratelimit, ban, ua, challenge.
+// ProxyHandler is the main reverse proxy handler for Client_WAF.
 type ProxyHandler struct {
 	cookieMgr      *cookie.HMACCookieManager
 	rateLimiter    *ratelimit.SlidingWindowLimiter
 	banEngine      *ban.InMemoryBanEngine
 	challengeStore *challenge.Store
+	cookieMgrV2    *cookie.CookieManagerV2
+	cookieLimiter  *ratelimit.CookieRateLimiter
+	escalationEng  *escalation.EscalationEngine
+	loopDetector   *challenge.LoopDetector
+	cfExtractor    *cf.CFExtractor
+	tlsExtractor   *fingerprint.TLSExtractor
 	backendURL     string
 	cookieSecret   []byte
 	cookieTTL      time.Duration
@@ -57,11 +51,12 @@ type ProxyHandler struct {
 	holdSeconds    int
 	banDuration    time.Duration
 	challengeTTL   time.Duration
+	transparentTTL time.Duration
 	challengeAll   bool
 	reverseProxy   *httputil.ReverseProxy
 }
 
-// NewProxyHandler tạo ProxyHandler mới với cấu hình và dependencies cho trước.
+// NewProxyHandler creates a new ProxyHandler with the given config and dependencies.
 func NewProxyHandler(
 	config ProxyConfig,
 	cookieMgr *cookie.HMACCookieManager,
@@ -69,9 +64,8 @@ func NewProxyHandler(
 	banEngine *ban.InMemoryBanEngine,
 	challengeStore *challenge.Store,
 ) *ProxyHandler {
-	// Set defaults
 	if config.CookieTTL <= 0 {
-		config.CookieTTL = 20 * time.Minute
+		config.CookieTTL = 5 * time.Minute
 	}
 	if config.Difficulty <= 0 {
 		config.Difficulty = challenge.DefaultDifficulty
@@ -84,6 +78,9 @@ func NewProxyHandler(
 	}
 	if config.ChallengeTTL <= 0 {
 		config.ChallengeTTL = 90 * time.Second
+	}
+	if config.TransparentTTL <= 0 {
+		config.TransparentTTL = 30 * time.Second
 	}
 
 	backendTarget, _ := url.Parse(config.BackendURL)
@@ -104,117 +101,184 @@ func NewProxyHandler(
 		holdSeconds:    config.HoldSeconds,
 		banDuration:    config.BanDuration,
 		challengeTTL:   config.ChallengeTTL,
+		transparentTTL: config.TransparentTTL,
 		challengeAll:   config.ChallengeAllNew,
 		reverseProxy:   rp,
 	}
 }
 
 // ServeHTTP implements http.Handler.
-// Luồng xử lý:
-//  1. Check User-Agent → if automation tool, block immediately (403)
-//  2. Check if IP is banned → if yes, return 403
-//  3. Check access cookie (HMAC-SHA256, IP-bound) → if valid, proxy to backend
-//  4. If no valid cookie:
-//     a. Record request in rate limiter
-//     b. If per-IP exceeds hard threshold → ban IP + return 403
-//     c. If per-IP exceeds soft threshold → serve Hold captcha
-//     d. If per-subnet exceeds threshold → serve PoW challenge
-//     e. Otherwise → proxy to backend
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Handle challenge verify endpoints
+	ip := h.extractClientIP(r)
+
 	if r.URL.Path == "/__kiro/challenge/verify" {
-		h.handleChallengeVerify(w, r)
+		h.handleChallengeVerify(w, r, ip)
 		return
 	}
 	if r.URL.Path == "/__kiro/hold/verify" {
-		h.handleHoldVerify(w, r)
+		h.handleHoldVerify(w, r, ip)
+		return
+	}
+	if r.URL.Path == "/__kiro/transparent/verify" {
+		h.handleTransparentVerify(w, r, ip)
 		return
 	}
 
-	ip := ClientIP(r)
-
-	// Step 1: Check User-Agent for automation tools
 	if ua.IsAutomationUA(r.UserAgent()) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
-	// Step 2: Check if IP is banned
 	if h.banEngine.IsBanned(ip) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
-	// Step 3: Check access cookie
-	if h.hasValidCookie(r, ip) {
+	if cookieValue, valid := h.hasValidCookieV2(r, ip); valid {
+		if h.cookieLimiter != nil && cookieValue != "" {
+			if !h.cookieLimiter.RecordAndCheck(cookieValue) {
+				h.serveChallengeForLevel(w, r, ip)
+				return
+			}
+		}
+		h.maybeRefreshCookie(w, r, ip)
 		h.reverseProxy.ServeHTTP(w, r)
 		return
 	}
 
-	// Step 3b: If challenge-all-new mode, serve PoW challenge immediately
-	if h.challengeAll {
+	h.serveChallengeForLevel(w, r, ip)
+}
+
+func (h *ProxyHandler) serveChallengeForLevel(w http.ResponseWriter, r *http.Request, ip string) {
+	level := h.getEscalationLevel(ip)
+
+	switch level {
+	case 0:
+		h.reverseProxy.ServeHTTP(w, r)
+	case 1:
+		if h.shouldBypassLoop(ip, "transparent") {
+			h.reverseProxy.ServeHTTP(w, r)
+			return
+		}
+		h.recordLoop(ip, "transparent")
+		challenge.ServeTransparentPage(w, r, h.challengeStore, h.transparentTTL, ip)
+	case 2:
+		if h.shouldBypassLoop(ip, "pow") {
+			h.reverseProxy.ServeHTTP(w, r)
+			return
+		}
+		h.recordLoop(ip, "pow")
 		challenge.ServeChallengePage(w, r, h.challengeStore, h.difficulty, h.challengeTTL, ip)
-		return
-	}
-
-	// Step 4: No valid cookie — apply rate limiting
-	h.rateLimiter.RecordRequest(ip)
-
-	// Step 4b: Check hard threshold → ban
-	if h.rateLimiter.IsHardBlocked(ip) {
-		h.banEngine.Ban(ip, h.banDuration, "hard_threshold_exceeded")
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-
-	// Step 4c: Check soft threshold (per-IP) → Hold captcha
-	if !h.rateLimiter.Allow(ip) {
+	case 3:
+		if h.shouldBypassLoop(ip, "hold") {
+			h.reverseProxy.ServeHTTP(w, r)
+			return
+		}
+		h.recordLoop(ip, "hold")
 		challenge.ServeHoldPage(w, r, h.challengeStore, h.holdSeconds, h.challengeTTL, ip)
-		return
+	default:
+		h.banEngine.Ban(ip, h.banDuration, "escalation_level_4")
+		http.Error(w, "forbidden", http.StatusForbidden)
 	}
-
-	// Step 4d: Check subnet threshold → PoW challenge
-	subnet := h.rateLimiter.GetSubnet24(ip)
-	if !h.rateLimiter.AllowSubnet(subnet) {
-		challenge.ServeChallengePage(w, r, h.challengeStore, h.difficulty, h.challengeTTL, ip)
-		return
-	}
-
-	// Step 4e: Under all thresholds → proxy to backend
-	h.reverseProxy.ServeHTTP(w, r)
 }
 
-// handleChallengeVerify xử lý POST /__kiro/challenge/verify.
-// Khi PoW solution hợp lệ, set access cookie và trả về 200.
-func (h *ProxyHandler) handleChallengeVerify(w http.ResponseWriter, r *http.Request) {
-	ip := ClientIP(r)
-	h.setAccessCookie(w, ip)
+func (h *ProxyHandler) handleTransparentVerify(w http.ResponseWriter, r *http.Request, ip string) {
+	success := challenge.VerifyTransparent(w, r, h.challengeStore, ip, h.escalationEng)
+	if success {
+		h.setAccessCookieV2(w, r, ip)
+		if h.escalationEng != nil {
+			h.escalationEng.RecordSuccess(ip)
+		}
+	}
+}
+
+func (h *ProxyHandler) handleChallengeVerify(w http.ResponseWriter, r *http.Request, ip string) {
+	h.setAccessCookieV2(w, r, ip)
 	challenge.VerifyChallenge(w, r, h.challengeStore, ip)
+	if h.escalationEng != nil {
+		h.escalationEng.RecordSuccess(ip)
+	}
 }
 
-// handleHoldVerify xử lý POST /__kiro/hold/verify.
-// Khi hold duration đủ, set access cookie và trả về 200.
-func (h *ProxyHandler) handleHoldVerify(w http.ResponseWriter, r *http.Request) {
-	ip := ClientIP(r)
-	// Set cookie BEFORE VerifyHold writes the response body,
-	// because headers must be set before WriteHeader is called.
-	// We pre-set the cookie; if verification fails, the cookie won't matter
-	// because the response will be 4xx and browser won't redirect.
-	h.setAccessCookie(w, ip)
+func (h *ProxyHandler) handleHoldVerify(w http.ResponseWriter, r *http.Request, ip string) {
+	h.setAccessCookieV2(w, r, ip)
 	challenge.VerifyHold(w, r, h.challengeStore, ip)
+	if h.escalationEng != nil {
+		h.escalationEng.RecordSuccess(ip)
+	}
 }
 
-// hasValidCookie kiểm tra request có access cookie hợp lệ hay không.
-func (h *ProxyHandler) hasValidCookie(r *http.Request, ip string) bool {
+func (h *ProxyHandler) extractClientIP(r *http.Request) string {
+	if h.cfExtractor != nil {
+		return h.cfExtractor.ExtractClientIP(r)
+	}
+	return ClientIP(r)
+}
+
+func (h *ProxyHandler) hasValidCookieV2(r *http.Request, ip string) (string, bool) {
 	c, err := r.Cookie("kiro_access")
 	if err != nil {
-		return false
+		return "", false
+	}
+	if h.cookieLimiter != nil {
+		if h.cookieLimiter.IsRevoked(c.Value) {
+			return "", false
+		}
+	}
+	if h.cookieMgrV2 != nil {
+		tlsFP := h.extractTLSFingerprint(r)
+		valid, _, _ := h.cookieMgrV2.ValidateCookie(c.Value, ip, tlsFP)
+		if valid {
+			return c.Value, true
+		}
+		return "", false
 	}
 	valid, _ := h.cookieMgr.ValidateCookie(c.Value, ip, h.cookieSecret)
-	return valid
+	if valid {
+		return c.Value, true
+	}
+	return "", false
 }
 
-// setAccessCookie tạo và set access cookie cho client.
+func (h *ProxyHandler) maybeRefreshCookie(w http.ResponseWriter, r *http.Request, ip string) {
+	if h.cookieMgrV2 == nil {
+		return
+	}
+	c, err := r.Cookie("kiro_access")
+	if err != nil {
+		return
+	}
+	tlsFP := h.extractTLSFingerprint(r)
+	valid, remainingTTL, _ := h.cookieMgrV2.ValidateCookie(c.Value, ip, tlsFP)
+	if !valid {
+		return
+	}
+	if h.cookieMgrV2.ShouldRefresh(remainingTTL, h.cookieTTL) {
+		h.setAccessCookieV2(w, r, ip)
+	}
+}
+
+func (h *ProxyHandler) setAccessCookieV2(w http.ResponseWriter, r *http.Request, ip string) {
+	if h.cookieMgrV2 != nil {
+		tlsFP := h.extractTLSFingerprint(r)
+		cookieValue, err := h.cookieMgrV2.GenerateCookie(ip, tlsFP, h.cookieTTL)
+		if err != nil {
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     "kiro_access",
+			Value:    cookieValue,
+			Path:     "/",
+			MaxAge:   int(h.cookieTTL.Seconds()),
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   true,
+		})
+		return
+	}
+	h.setAccessCookie(w, ip)
+}
+
 func (h *ProxyHandler) setAccessCookie(w http.ResponseWriter, ip string) {
 	cookieValue, err := h.cookieMgr.GenerateCookie(ip, h.cookieSecret, h.cookieTTL)
 	if err != nil {
@@ -229,4 +293,54 @@ func (h *ProxyHandler) setAccessCookie(w http.ResponseWriter, ip string) {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   true,
 	})
+}
+
+func (h *ProxyHandler) extractTLSFingerprint(r *http.Request) string {
+	if h.tlsExtractor != nil {
+		return h.tlsExtractor.ExtractFingerprint(r)
+	}
+	return ""
+}
+
+func (h *ProxyHandler) getEscalationLevel(ip string) int {
+	if h.escalationEng != nil {
+		return h.escalationEng.GetLevel(ip)
+	}
+	h.rateLimiter.RecordRequest(ip)
+	if h.rateLimiter.IsHardBlocked(ip) {
+		return 4
+	}
+	if !h.rateLimiter.Allow(ip) {
+		return 3
+	}
+	subnet := h.rateLimiter.GetSubnet24(ip)
+	if !h.rateLimiter.AllowSubnet(subnet) {
+		return 2
+	}
+	if h.challengeAll {
+		return 1
+	}
+	return 0
+}
+
+func (h *ProxyHandler) shouldBypassLoop(ip string, challengeType string) bool {
+	if h.loopDetector != nil {
+		return h.loopDetector.ShouldBypass(ip, challengeType)
+	}
+	return false
+}
+
+func (h *ProxyHandler) recordLoop(ip string, challengeType string) {
+	if h.loopDetector != nil {
+		h.loopDetector.Record(ip, challengeType)
+	}
+}
+
+func (h *ProxyHandler) hasValidCookie(r *http.Request, ip string) bool {
+	c, err := r.Cookie("kiro_access")
+	if err != nil {
+		return false
+	}
+	valid, _ := h.cookieMgr.ValidateCookie(c.Value, ip, h.cookieSecret)
+	return valid
 }

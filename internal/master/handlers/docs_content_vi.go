@@ -99,7 +99,7 @@ var viInstallation template.HTML = `<h2>Hướng Dẫn Cài Đặt</h2>
 
 <h4>Community Plan (miễn phí)</h4>
 <pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash</code></pre>
-<p>Không cần license key — script tự động đăng ký gói Community miễn phí qua <code>POST /api/v1/register</code>.</p>
+<p>Không cần license key — script tự động đăng ký gói Community miễn phí qua máy chủ quản lý.</p>
 
 <h4>Pro/Enterprise Plan</h4>
 <pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash -s -- --license-key YOUR-LICENSE-KEY</code></pre>
@@ -113,7 +113,7 @@ var viInstallation template.HTML = `<h2>Hướng Dẫn Cài Đặt</h2>
 <ol>
 <li>Phát hiện bản phân phối và phiên bản OS</li>
 <li>Cài đặt dependency cần thiết (curl, sha256sum, systemctl)</li>
-<li>Tự đăng ký Community license nếu không có <code>--license-key</code> (gọi <code>POST /api/v1/register</code>)</li>
+<li>Tự đăng ký Community license nếu không có <code>--license-key</code> (gọi endpoint đăng ký trên máy chủ quản lý)</li>
 <li>Tải binary <code>kiro-client-waf</code> với xác minh SHA-256</li>
 <li>Cài đặt tại <code>/usr/local/bin/kiro-client-waf</code></li>
 <li>Tạo thư mục cấu hình tại <code>/etc/kiro/</code></li>

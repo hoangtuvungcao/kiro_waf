@@ -74,7 +74,12 @@
 #define KIRO_STAT_DROP_RATE_SUBNET24 8
 #define KIRO_STAT_DROP_FRAGMENT     9
 #define KIRO_STAT_DROP_UDP_PORT     10
-#define KIRO_STAT_MAX               11
+#define KIRO_STAT_DROP_INVALID_ACK  11
+#define KIRO_STAT_SYNCOOKIE_ISSUED  12
+#define KIRO_STAT_SYNCOOKIE_VALID   13
+#define KIRO_STAT_DROP_GEOIP        14
+#define KIRO_STAT_DROP_BOTNET       15
+#define KIRO_STAT_MAX               16
 
 /* ─── Rate limit action codes ─── */
 #define KIRO_RATE_PASS              0
@@ -126,6 +131,11 @@ struct lpm_v4_key {
 	__u32 addr;
 };
 
+/* ─── GeoIP value (country code stored as __u16) ─── */
+struct geoip_value {
+	__u16 country_code;  /* e.g., 'C'<<8|'N' for "CN" */
+};
+
 /* ─── Runtime configuration (synced from userspace) ─── */
 struct kiro_xdp_config {
 	__u64 window_ns;              /* Rate window duration in nanoseconds */
@@ -138,6 +148,49 @@ struct kiro_xdp_config {
 	__u8 rate_limit_enabled;      /* Enable rate limiting */
 	__u8 drop_fragments;          /* Drop IP fragments */
 	__u32 per_subnet24_pps;       /* Per /24 subnet packets-per-second */
+	__u32 syn_cookie_threshold;   /* SYN/s to activate cookies (default: 10000) */
+	__u8 syn_cookie_active;       /* 1 = SYN cookies active, 0 = off */
+	__u8 conn_tracker_enabled;    /* 1 = connection tracking enabled */
+	__u8 geoip_enabled;           /* 1 = GeoIP blocking enabled */
+	__u8 _pad_sc;                 /* Padding for alignment */
+	__u32 botnet_new_ip_threshold;  /* new IPs/s to activate botnet mode (default: 5000) */
+	__u32 botnet_cooldown_seconds;  /* seconds below 50% to deactivate (default: 30) */
+	__u8  botnet_mode_active;       /* 1 = botnet mode on, 0 = off */
+	__u8  _pad_bn[3];              /* Padding for alignment */
+};
+
+/* ─── SYN cookie key (SipHash-2-4 key material) ─── */
+struct syn_cookie_key {
+	__u64 k0;  /* SipHash key part 1 */
+	__u64 k1;  /* SipHash key part 2 */
+};
+
+/* ─── Global SYN rate tracking state (per-CPU) ─── */
+struct syn_rate_state {
+	__u64 window_start_ns;
+	__u32 syn_count;
+	__u32 _pad;
+};
+
+/* ─── Per-CPU new-IP counter for botnet detection (Req 15.1, 15.5) ─── */
+struct new_ip_counter {
+	__u64 window_start_ns;
+	__u32 count;
+	__u32 _pad;
+};
+
+/* ─── Connection tracker key ─── */
+struct conn_key {
+	__u32 src_ip;      /* network byte order */
+	__u16 src_port;    /* network byte order */
+	__u16 dst_port;    /* network byte order */
+};
+
+/* ─── Connection tracker value ─── */
+struct conn_value {
+	__u64 established_ns;  /* timestamp when connection was validated */
+	__u8  state;           /* 1=established, 0=closing */
+	__u8  _pad[7];
 };
 
 /* ─── Rate limiting state key ─── */
@@ -235,6 +288,91 @@ struct bpf_map_def SEC("maps") udp_src_port_blocklist = {
 	.max_entries = 1024,
 };
 
+/*
+ * Connection tracker: lightweight stateful tracking of established TCP
+ * connections (Req 13.1, 13.4, 13.6).
+ * BPF_MAP_TYPE_LRU_HASH with 524,288 max entries.
+ * When full, kernel automatically evicts the least-recently-used entry.
+ * Keyed by (src_ip, src_port, dst_port) tuple for O(1) lookup.
+ */
+struct bpf_map_def SEC("maps") conn_tracker = {
+	.type = BPF_MAP_TYPE_LRU_HASH,
+	.key_size = sizeof(struct conn_key),
+	.value_size = sizeof(struct conn_value),
+	.max_entries = 524288,
+};
+
+/*
+ * GeoIP LPM trie: IP prefix → country code (Req 14.1, 14.4).
+ * Maps IPv4 prefixes to 2-letter country codes encoded as __u16.
+ * 524,288 entries to cover the full IPv4 GeoIP database (500K+ prefixes).
+ * NO_PREALLOC because entries are sparse and managed from userspace.
+ */
+struct bpf_map_def SEC("maps") geoip_map = {
+	.type = BPF_MAP_TYPE_LPM_TRIE,
+	.key_size = sizeof(struct lpm_v4_key),
+	.value_size = sizeof(struct geoip_value),
+	.max_entries = 524288,
+	.map_flags = BPF_F_NO_PREALLOC,
+};
+
+/*
+ * Country blocklist: country_code → 1 (blocked) (Req 14.2, 14.6).
+ * Hash map of blocked country codes. Populated from userspace via
+ * KIRO_XDP_BLOCKED_COUNTRIES environment variable.
+ * 256 entries covers all possible ISO 3166-1 alpha-2 country codes.
+ */
+struct bpf_map_def SEC("maps") country_blocklist = {
+	.type = BPF_MAP_TYPE_HASH,
+	.key_size = sizeof(__u16),
+	.value_size = sizeof(__u8),
+	.max_entries = 256,
+};
+
+/* SYN cookie key (SipHash key material, single entry array).
+ * Rotated every 24h from userspace. */
+struct bpf_map_def SEC("maps") syn_cookie_key_map = {
+	.type = BPF_MAP_TYPE_ARRAY,
+	.key_size = sizeof(__u32),
+	.value_size = sizeof(struct syn_cookie_key),
+	.max_entries = 1,
+};
+
+/* Global SYN rate tracking (per-CPU array, single entry).
+ * Each CPU tracks its own SYN count independently. */
+struct bpf_map_def SEC("maps") syn_rate = {
+	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size = sizeof(__u32),
+	.value_size = sizeof(struct syn_rate_state),
+	.max_entries = 1,
+};
+
+/*
+ * IP deduplication map for botnet detection (Req 15.1, 15.5).
+ * Tracks recently-seen source IPs to count unique new IPs per second.
+ * BPF_MAP_TYPE_LRU_HASH with 262,144 entries — kernel auto-evicts oldest.
+ * Key: src_ip (__u32), Value: last_seen_ns (__u64).
+ */
+struct bpf_map_def SEC("maps") ip_dedup = {
+	.type = BPF_MAP_TYPE_LRU_HASH,
+	.key_size = sizeof(__u32),
+	.value_size = sizeof(__u64),
+	.max_entries = 262144,
+};
+
+/*
+ * Per-CPU new-IP rate counter for botnet detection (Req 15.1, 15.5).
+ * Each CPU independently counts unique new IPs within a 1-second window.
+ * Single entry per-CPU array — no cross-CPU synchronization in hot path.
+ * Userspace sums all CPU counters for the true global rate.
+ */
+struct bpf_map_def SEC("maps") new_ip_rate = {
+	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size = sizeof(__u32),
+	.value_size = sizeof(struct new_ip_counter),
+	.max_entries = 1,
+};
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * BPF Helper Function Pointers
  * ═══════════════════════════════════════════════════════════════════════════ */
@@ -242,7 +380,11 @@ struct bpf_map_def SEC("maps") udp_src_port_blocklist = {
 static void *(*bpf_map_lookup_elem)(void *map, const void *key) = (void *)1;
 static long (*bpf_map_update_elem)(void *map, const void *key,
 				   const void *value, __u64 flags) = (void *)2;
+static long (*bpf_map_delete_elem)(void *map, const void *key) = (void *)3;
 static __u64 (*bpf_ktime_get_ns)(void) = (void *)5;
+static __u16 (*bpf_csum_diff)(__u32 *from, __u32 from_size,
+			      __u32 *to, __u32 to_size,
+			      __u32 seed) __attribute__((unused)) = (void *)28;
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Helper Functions
@@ -370,6 +512,333 @@ static __always_inline __u32 subnet24_key(__u32 network_order_saddr)
 {
 	__u32 host_order = __builtin_bswap32(network_order_saddr);
 	return __builtin_bswap32(host_order & 0xffffff00);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * SipHash-2-4 Implementation (Inline)
+ *
+ * Computes a 64-bit SipHash-2-4 of a 12-byte input (src_ip || src_port ||
+ * dst_port || timestamp_bucket), truncated to 32 bits for use as a SYN
+ * cookie ISN. ~20 cycles for 12-byte input on modern x86_64.
+ *
+ * Reference: https://131002.net/siphash/
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+#define SIPROUND \
+	do { \
+		v0 += v1; v1 = (v1 << 13) | (v1 >> 51); v1 ^= v0; \
+		v0 = (v0 << 32) | (v0 >> 32); \
+		v2 += v3; v3 = (v3 << 16) | (v3 >> 48); v3 ^= v2; \
+		v0 += v3; v3 = (v3 << 21) | (v3 >> 43); v3 ^= v0; \
+		v2 += v1; v1 = (v1 << 17) | (v1 >> 47); v1 ^= v2; \
+		v2 = (v2 << 32) | (v2 >> 32); \
+	} while (0)
+
+/*
+ * Compute SipHash-2-4 for a 12-byte message (3 x __u32 fields packed into
+ * two 64-bit words with padding). Returns truncated 32-bit hash.
+ *
+ * Input layout (12 bytes):
+ *   [0..3]  src_ip (network byte order, __u32)
+ *   [4..5]  src_port (network byte order, __u16)
+ *   [6..7]  dst_port (network byte order, __u16)
+ *   [8..11] timestamp_bucket (__u32)
+ *
+ * Packed into:
+ *   m0 = src_ip | (src_port << 32) | (dst_port << 48)  [first 8 bytes]
+ *   m1 = timestamp_bucket | (0x0c << 56)               [last 4 bytes + length]
+ */
+static __always_inline __u32 siphash_syn_cookie(struct syn_cookie_key *key,
+						__u32 src_ip, __u16 src_port,
+						__u16 dst_port, __u32 ts_bucket)
+{
+	__u64 v0 = key->k0 ^ 0x736f6d6570736575ULL;
+	__u64 v1 = key->k1 ^ 0x646f72616e646f6dULL;
+	__u64 v2 = key->k0 ^ 0x6c7967656e657261ULL;
+	__u64 v3 = key->k1 ^ 0x7465646279746573ULL;
+	__u64 m0, m1;
+
+	/* Pack 12-byte input into two 64-bit words */
+	m0 = (__u64)src_ip | ((__u64)src_port << 32) | ((__u64)dst_port << 48);
+	/* Last word: 4 bytes of ts_bucket + length byte (0x0c = 12) in MSB */
+	m1 = (__u64)ts_bucket | (0x0cULL << 56);
+
+	/* Process first 8-byte block */
+	v3 ^= m0;
+	SIPROUND;
+	SIPROUND;
+	v0 ^= m0;
+
+	/* Process second 8-byte block (with length padding) */
+	v3 ^= m1;
+	SIPROUND;
+	SIPROUND;
+	v0 ^= m1;
+
+	/* Finalization */
+	v2 ^= 0xff;
+	SIPROUND;
+	SIPROUND;
+	SIPROUND;
+	SIPROUND;
+
+	/* Return truncated 32-bit hash */
+	return (__u32)(v0 ^ v1 ^ v2 ^ v3);
+}
+
+/*
+ * Track global SYN rate and determine if SYN cookies should be activated.
+ * Returns 1 if SYN rate exceeds threshold, 0 otherwise.
+ * Uses 1-second windows per CPU.
+ */
+static __always_inline int syn_rate_exceeded(struct kiro_xdp_config *cfg)
+{
+	struct syn_rate_state *state;
+	__u32 key = 0;
+	__u64 now;
+
+	if (!cfg || cfg->syn_cookie_threshold == 0)
+		return 0;
+
+	state = bpf_map_lookup_elem(&syn_rate, &key);
+	if (!state)
+		return 0;
+
+	now = bpf_ktime_get_ns();
+
+	/* Reset counter if window has elapsed (1-second window) */
+	if (now - state->window_start_ns >= 1000000000ULL) {
+		state->window_start_ns = now;
+		state->syn_count = 1;
+		return 0;
+	}
+
+	state->syn_count++;
+
+	/* Check if this CPU's SYN count exceeds threshold.
+	 * Note: this is per-CPU, so the effective global threshold is
+	 * approximately syn_cookie_threshold across all CPUs. For simplicity,
+	 * we use the full threshold per-CPU (conservative activation). */
+	return state->syn_count > cfg->syn_cookie_threshold;
+}
+
+/*
+ * Track new unique source IPs for distributed botnet detection (Req 15.1, 15.5).
+ * For each packet, checks if src_ip is already in ip_dedup map.
+ * If not found (new IP), increments per-CPU new_ip_rate counter and inserts
+ * into ip_dedup. Uses 1-second windows per CPU.
+ *
+ * Per-CPU threshold = botnet_new_ip_threshold / num_cpus (approximate).
+ * Each CPU checks independently — no cross-CPU synchronization in hot path.
+ */
+static __always_inline void botnet_track_new_ip(struct kiro_xdp_config *cfg,
+						__u32 src_ip)
+{
+	struct new_ip_counter *counter;
+	__u64 *seen;
+	__u32 key = 0;
+	__u64 now;
+
+	if (!cfg || cfg->botnet_new_ip_threshold == 0)
+		return;
+
+	/* Check if this IP was recently seen */
+	seen = bpf_map_lookup_elem(&ip_dedup, &src_ip);
+	if (seen) {
+		/* IP already known — update last-seen timestamp */
+		now = bpf_ktime_get_ns();
+		*seen = now;
+		return;
+	}
+
+	/* New IP — increment per-CPU counter and insert into dedup map */
+	counter = bpf_map_lookup_elem(&new_ip_rate, &key);
+	if (!counter)
+		return;
+
+	now = bpf_ktime_get_ns();
+
+	/* Reset counter if window has elapsed (1-second window) */
+	if (now - counter->window_start_ns >= 1000000000ULL) {
+		counter->window_start_ns = now;
+		counter->count = 1;
+	} else {
+		counter->count++;
+	}
+
+	/* Insert new IP into dedup map (LRU auto-evicts if full) */
+	bpf_map_update_elem(&ip_dedup, &src_ip, &now, BPF_ANY);
+
+	/* Per-CPU approximate activation: if this CPU's count exceeds
+	 * the per-CPU share of the threshold, activate botnet mode.
+	 * Per-CPU threshold = botnet_new_ip_threshold / num_cpus.
+	 * We approximate num_cpus as a compile-time constant or use the
+	 * full threshold (conservative — requires all CPUs to exceed). */
+	if (counter->count > cfg->botnet_new_ip_threshold) {
+		cfg->botnet_mode_active = 1;
+	}
+}
+
+/*
+ * Compute the IP header checksum (RFC 1071).
+ * The IP header checksum is the 16-bit one's complement of the one's
+ * complement sum of all 16-bit words in the header.
+ */
+static __always_inline __u16 ip_checksum(struct iphdr *iph)
+{
+	__u32 sum = 0;
+	__u16 *ptr = (__u16 *)iph;
+	int i;
+
+	iph->check = 0;
+
+	/* Sum all 16-bit words in the IP header (20 bytes = 10 words) */
+	#pragma unroll
+	for (i = 0; i < 10; i++)
+		sum += ptr[i];
+
+	/* Fold 32-bit sum to 16 bits */
+	sum = (sum >> 16) + (sum & 0xffff);
+	sum += (sum >> 16);
+
+	return (__u16)(~sum);
+}
+
+/*
+ * Compute TCP checksum for a SYN-ACK packet (no payload, no TCP options
+ * beyond what we set). Uses pseudo-header + TCP header.
+ */
+static __always_inline __u16 tcp_checksum(struct iphdr *iph, void *tcp_hdr,
+					  __u16 tcp_len)
+{
+	__u32 sum = 0;
+	__u16 *ptr;
+	int i;
+
+	/* Pseudo-header: src_ip + dst_ip + zero + protocol + tcp_length */
+	sum += (iph->saddr >> 16) & 0xffff;
+	sum += iph->saddr & 0xffff;
+	sum += (iph->daddr >> 16) & 0xffff;
+	sum += iph->daddr & 0xffff;
+	sum += __builtin_bswap16((__u16)KIRO_IPPROTO_TCP);
+	sum += __builtin_bswap16(tcp_len);
+
+	/* Sum TCP header words */
+	ptr = (__u16 *)tcp_hdr;
+	#pragma unroll
+	for (i = 0; i < 10; i++)  /* 20 bytes = 10 words (minimal TCP header) */
+		sum += ptr[i];
+
+	/* Fold 32-bit sum to 16 bits */
+	sum = (sum >> 16) + (sum & 0xffff);
+	sum += (sum >> 16);
+
+	return (__u16)(~sum);
+}
+
+/*
+ * Craft and transmit a SYN-ACK response with the SYN cookie encoded in
+ * the sequence number. Swaps MAC, IP, and port addresses.
+ * Returns XDP_TX on success, XDP_PASS on failure (bounds check).
+ */
+static __always_inline int send_syn_cookie_response(struct xdp_md *ctx,
+						    struct ethhdr *eth,
+						    struct iphdr *iph,
+						    void *tcp_hdr,
+						    __u32 cookie)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	__u16 *sport = tcp_hdr;
+	__u16 *dport = tcp_hdr + 2;
+	__u32 *seq_num = tcp_hdr + 4;
+	__u32 *ack_num = tcp_hdr + 8;
+	__u8 *offset_flags = tcp_hdr + 12;
+	__u8 *tcp_flags = tcp_hdr + 13;
+	__u16 *window = tcp_hdr + 14;
+	__u16 *tcp_checksum_field = tcp_hdr + 16;
+	__u16 *urgent = tcp_hdr + 18;
+	unsigned char tmp_mac[6];
+	__u32 tmp_ip;
+	__u16 tmp_port;
+	__u32 client_seq;
+
+	/* Bounds check for TCP header access (20 bytes minimum) */
+	if (tcp_hdr + KIRO_TCP_MIN_HEADER_LEN > data_end)
+		return XDP_PASS;
+
+	/* Save client's sequence number for ACK */
+	client_seq = *seq_num;
+
+	/* ─── Swap Ethernet MAC addresses ─── */
+	__builtin_memcpy(tmp_mac, eth->h_dest, 6);
+	__builtin_memcpy(eth->h_dest, eth->h_source, 6);
+	__builtin_memcpy(eth->h_source, tmp_mac, 6);
+
+	/* ─── Swap IP addresses ─── */
+	tmp_ip = iph->saddr;
+	iph->saddr = iph->daddr;
+	iph->daddr = tmp_ip;
+
+	/* Update IP header for response */
+	iph->tot_len = __builtin_bswap16(40); /* 20 IP + 20 TCP (no options) */
+	iph->ttl = 64;
+	iph->id = 0;
+	iph->frag_off = __builtin_bswap16(0x4000); /* Don't Fragment */
+
+	/* ─── Swap TCP ports ─── */
+	tmp_port = *sport;
+	*sport = *dport;
+	*dport = tmp_port;
+
+	/* ─── Set TCP SYN-ACK fields ─── */
+	*ack_num = __builtin_bswap32(__builtin_bswap32(client_seq) + 1);
+	*seq_num = __builtin_bswap32(cookie);
+	*offset_flags = (5 << 4); /* Data offset = 5 (20 bytes), no reserved bits */
+	*tcp_flags = KIRO_TCP_FLAG_SYN | KIRO_TCP_FLAG_ACK;
+	*window = __builtin_bswap16(65535); /* Maximum window size */
+	*urgent = 0;
+
+	/* ─── Compute checksums ─── */
+	*tcp_checksum_field = 0;
+	*tcp_checksum_field = tcp_checksum(iph, tcp_hdr, KIRO_TCP_MIN_HEADER_LEN);
+	iph->check = ip_checksum(iph);
+
+	return XDP_TX;
+}
+
+/*
+ * Validate a SYN cookie from an incoming ACK packet.
+ * Checks both current and previous timestamp bucket (1-second buckets)
+ * to handle boundary crossings.
+ * Returns 1 if valid, 0 if invalid.
+ */
+static __always_inline int validate_syn_cookie(__u32 ack_num_host,
+					       __u32 src_ip, __u16 src_port,
+					       __u16 dst_port,
+					       struct syn_cookie_key *key)
+{
+	__u64 now_ns = bpf_ktime_get_ns();
+	__u32 ts_current = (__u32)(now_ns / 1000000000ULL);
+	__u32 ts_previous = ts_current > 0 ? ts_current - 1 : 0;
+	__u32 expected_cookie;
+	__u32 cookie_value;
+
+	/* The client ACKs with cookie + 1, so the cookie is ack_num - 1 */
+	cookie_value = ack_num_host - 1;
+
+	/* Check current timestamp bucket */
+	expected_cookie = siphash_syn_cookie(key, src_ip, src_port,
+					     dst_port, ts_current);
+	if (cookie_value == expected_cookie)
+		return 1;
+
+	/* Check previous timestamp bucket (handles 1-second boundary crossing) */
+	expected_cookie = siphash_syn_cookie(key, src_ip, src_port,
+					     dst_port, ts_previous);
+	if (cookie_value == expected_cookie)
+		return 1;
+
+	return 0;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -590,6 +1059,26 @@ int kiro_xdp_drop(struct xdp_md *ctx)
 		return XDP_DROP;
 	}
 
+	/* ─── Step 3b: GeoIP country blocking (Req 14.3) ───
+	 * Lookup order: LPM lookup in geoip_map → get country code →
+	 * hash lookup in country_blocklist → DROP if found.
+	 * Skipped entirely when geoip_enabled is 0 (conservative default). */
+	if (cfg && cfg->geoip_enabled) {
+		struct lpm_v4_key geo_key = {
+			.prefixlen = 32,
+			.addr = iph->saddr,
+		};
+		struct geoip_value *geo_val = bpf_map_lookup_elem(&geoip_map, &geo_key);
+		if (geo_val) {
+			__u16 cc = geo_val->country_code;
+			__u8 *blocked = bpf_map_lookup_elem(&country_blocklist, &cc);
+			if (blocked && *blocked != 0) {
+				stat_inc(KIRO_STAT_DROP_GEOIP);
+				return XDP_DROP;
+			}
+		}
+	}
+
 	/* ─── Step 4: Private source IP drop (RFC 1918, loopback, link-local) ─── */
 	if (cfg && cfg->drop_private_source_ip && private_source_v4(iph->saddr)) {
 		stat_inc(KIRO_STAT_DROP_PRIVATE);
@@ -611,6 +1100,13 @@ int kiro_xdp_drop(struct xdp_md *ctx)
 		stat_inc(KIRO_STAT_PASS);
 		return XDP_PASS;
 	}
+
+	/* ─── Step 5b: Botnet detection — track new unique IPs (Req 15.1, 15.5) ───
+	 * For each non-fragment IPv4 packet, check if src_ip is new.
+	 * If new, increment per-CPU new_ip_rate counter and insert into ip_dedup.
+	 * This must happen before protocol-specific checks to count all traffic. */
+	if (cfg)
+		botnet_track_new_ip(cfg, iph->saddr);
 
 	/* ─── Step 6: Protocol-specific checks ─── */
 	void *transport = (void *)iph + ip_header_len;
@@ -635,8 +1131,134 @@ int kiro_xdp_drop(struct xdp_md *ctx)
 
 		/* Track SYN-only packets for SYN flood rate limiting */
 		if ((*tcp_flags & (KIRO_TCP_FLAG_SYN | KIRO_TCP_FLAG_ACK)) ==
-		    KIRO_TCP_FLAG_SYN)
+		    KIRO_TCP_FLAG_SYN) {
 			is_tcp_syn = 1;
+
+			/* ─── SYN Cookie: Generate SYN-ACK when rate exceeds threshold ─── */
+			if (cfg && cfg->syn_cookie_active && syn_rate_exceeded(cfg)) {
+				struct syn_cookie_key *sck;
+				__u32 sck_key = 0;
+				__u16 *sport_ptr = transport;
+				__u16 *dport_ptr = transport + 2;
+				__u32 ts_bucket;
+				__u32 cookie;
+				int tx_rc;
+
+				sck = bpf_map_lookup_elem(&syn_cookie_key_map, &sck_key);
+				if (sck) {
+					ts_bucket = (__u32)(bpf_ktime_get_ns() / 1000000000ULL);
+					cookie = siphash_syn_cookie(sck,
+								    iph->saddr,
+								    *sport_ptr,
+								    *dport_ptr,
+								    ts_bucket);
+					tx_rc = send_syn_cookie_response(ctx, eth, iph,
+									 transport, cookie);
+					if (tx_rc == XDP_TX) {
+						stat_inc(KIRO_STAT_SYNCOOKIE_ISSUED);
+						return XDP_TX;
+					}
+				}
+			}
+		}
+
+		/* ─── SYN Cookie: Validate ACK packets ─── */
+		if (cfg && cfg->syn_cookie_active &&
+		    (*tcp_flags & (KIRO_TCP_FLAG_SYN | KIRO_TCP_FLAG_ACK)) ==
+		    KIRO_TCP_FLAG_ACK) {
+			struct syn_cookie_key *sck;
+			__u32 sck_key = 0;
+			__u32 *ack_num_ptr = transport + 8;
+			__u16 *sport_ptr = transport;
+			__u16 *dport_ptr = transport + 2;
+			__u32 ack_host;
+
+			sck = bpf_map_lookup_elem(&syn_cookie_key_map, &sck_key);
+			if (sck) {
+				ack_host = __builtin_bswap32(*ack_num_ptr);
+				if (validate_syn_cookie(ack_host, iph->saddr,
+							*sport_ptr, *dport_ptr,
+							sck)) {
+					stat_inc(KIRO_STAT_SYNCOOKIE_VALID);
+
+					/* Insert into connection tracker on successful validation (Req 13.2) */
+					if (cfg->conn_tracker_enabled) {
+						struct conn_key ck = {
+							.src_ip = iph->saddr,
+							.src_port = *sport_ptr,
+							.dst_port = *dport_ptr,
+						};
+						struct conn_value cv = {
+							.established_ns = bpf_ktime_get_ns(),
+							.state = 1,
+						};
+						bpf_map_update_elem(&conn_tracker, &ck, &cv, BPF_ANY);
+					}
+
+					stat_inc(KIRO_STAT_PASS);
+					return XDP_PASS;
+				} else {
+					stat_inc(KIRO_STAT_DROP_INVALID_ACK);
+					return XDP_DROP;
+				}
+			}
+		}
+
+		/* ─── Connection Tracker: RST/FIN removal (Req 13.5) ─── */
+		if (cfg && cfg->conn_tracker_enabled &&
+		    (*tcp_flags & (KIRO_TCP_FLAG_RST | KIRO_TCP_FLAG_FIN))) {
+			__u16 *sport_ptr = transport;
+			__u16 *dport_ptr = transport + 2;
+			struct conn_key ck = {
+				.src_ip = iph->saddr,
+				.src_port = *sport_ptr,
+				.dst_port = *dport_ptr,
+			};
+			bpf_map_delete_elem(&conn_tracker, &ck);
+		}
+
+		/* ─── Connection Tracker: Data packet validation (Req 13.3, 15.3) ─── */
+		if (cfg && cfg->conn_tracker_enabled &&
+		    !(*tcp_flags & (KIRO_TCP_FLAG_SYN | KIRO_TCP_FLAG_RST | KIRO_TCP_FLAG_FIN))) {
+			__u16 *sport_ptr = transport;
+			__u16 *dport_ptr = transport + 2;
+			struct conn_key ck = {
+				.src_ip = iph->saddr,
+				.src_port = *sport_ptr,
+				.dst_port = *dport_ptr,
+			};
+			struct conn_value *cv = bpf_map_lookup_elem(&conn_tracker, &ck);
+			if (!cv) {
+				/* Packet from untracked connection.
+				 * In botnet mode (Req 15.3): drop with BOTNET counter.
+				 * Otherwise: drop with INVALID_ACK counter (Req 13.3). */
+				if (cfg->botnet_mode_active) {
+					stat_inc(KIRO_STAT_DROP_BOTNET);
+				} else {
+					stat_inc(KIRO_STAT_DROP_INVALID_ACK);
+				}
+				return XDP_DROP;
+			}
+		}
+
+		/* ─── Botnet mode enforcement for untracked TCP data (Req 15.3) ───
+		 * When botnet mode is active but conn_tracker is not explicitly
+		 * enabled, still enforce: drop packets from IPs NOT in conn_tracker. */
+		if (cfg && !cfg->conn_tracker_enabled && cfg->botnet_mode_active &&
+		    !(*tcp_flags & (KIRO_TCP_FLAG_SYN | KIRO_TCP_FLAG_RST | KIRO_TCP_FLAG_FIN))) {
+			__u16 *sport_ptr = transport;
+			__u16 *dport_ptr = transport + 2;
+			struct conn_key ck = {
+				.src_ip = iph->saddr,
+				.src_port = *sport_ptr,
+				.dst_port = *dport_ptr,
+			};
+			struct conn_value *cv = bpf_map_lookup_elem(&conn_tracker, &ck);
+			if (!cv) {
+				stat_inc(KIRO_STAT_DROP_BOTNET);
+				return XDP_DROP;
+			}
+		}
 
 	} else if (iph->protocol == KIRO_IPPROTO_UDP) {
 		__u16 *udp_source = transport;

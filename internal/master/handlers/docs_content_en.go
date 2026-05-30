@@ -40,7 +40,7 @@ var enQuickStart template.HTML = `<div class="docs-welcome-card">
 <h2>Step 1: Download and Run the Installer</h2>
 <h3>Community Plan (free, auto-registers)</h3>
 <pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash</code></pre>
-<p>No license key needed — the script auto-registers a free Community plan via <code>POST /api/v1/register</code>.</p>
+<p>No license key needed — the script auto-registers a free Community plan via the management server.</p>
 
 <h3>Pro/Enterprise Plan (with license key)</h3>
 <pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash -s -- --license-key YOUR-LICENSE-KEY</code></pre>
@@ -99,7 +99,7 @@ var enInstallation template.HTML = `<h2>Installation Guide</h2>
 
 <h4>Community Plan (free)</h4>
 <pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash</code></pre>
-<p>No license key needed — the script auto-registers a free Community plan via <code>POST /api/v1/register</code>.</p>
+<p>No license key needed — the script auto-registers a free Community plan via the management server.</p>
 
 <h4>Pro/Enterprise Plan</h4>
 <pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash -s -- --license-key YOUR-LICENSE-KEY</code></pre>
@@ -113,7 +113,7 @@ var enInstallation template.HTML = `<h2>Installation Guide</h2>
 <ol>
 <li>Detects your OS distribution and version</li>
 <li>Installs required dependencies (curl, sha256sum, systemctl)</li>
-<li>Auto-registers Community license if no <code>--license-key</code> provided (calls <code>POST /api/v1/register</code>)</li>
+<li>Auto-registers Community license if no <code>--license-key</code> provided (calls the management server registration endpoint)</li>
 <li>Downloads the <code>kiro-client-waf</code> binary with SHA-256 verification</li>
 <li>Installs to <code>/usr/local/bin/kiro-client-waf</code></li>
 <li>Creates the configuration directory at <code>/etc/kiro/</code></li>

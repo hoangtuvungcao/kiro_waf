@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"kiro_waf/master-server/handlers"
-	"kiro_waf/master-server/templates"
+	"kiro_waf/internal/master/handlers"
+	"kiro_waf/internal/master/templates"
 
 	"pgregory.net/rapid"
 )

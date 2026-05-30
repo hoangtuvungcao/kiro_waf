@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"kiro_waf/master-server/db"
-	"kiro_waf/master-server/handlers"
-	"kiro_waf/master-server/models"
+	"kiro_waf/internal/master/db"
+	"kiro_waf/internal/master/handlers"
+	"kiro_waf/internal/master/models"
 )
 
 // setupTestDB creates a temporary SQLite database for testing.

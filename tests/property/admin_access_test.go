@@ -12,7 +12,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"kiro_waf/master-server/handlers"
+	"kiro_waf/internal/master/handlers"
 
 	"pgregory.net/rapid"
 )

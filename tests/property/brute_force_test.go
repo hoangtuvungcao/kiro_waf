@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"kiro_waf/master-server/db"
-	"kiro_waf/master-server/handlers"
+	"kiro_waf/internal/master/db"
+	"kiro_waf/internal/master/handlers"
 
 	"pgregory.net/rapid"
 )

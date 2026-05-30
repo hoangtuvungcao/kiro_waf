@@ -23,4 +23,13 @@ type XDPConfig struct {
 	RateLimitEnabled    uint8  `json:"rate_limit_enabled"`
 	DropFragments       uint8  `json:"drop_fragments"`
 	PerSubnet24PPS      uint32 `json:"per_subnet24_pps"`
+	SynCookieThreshold  uint32 `json:"syn_cookie_threshold"`
+	SynCookieActive     uint8  `json:"syn_cookie_active"`
+	ConnTrackerEnabled  uint8  `json:"conn_tracker_enabled"`
+	GeoIPEnabled        uint8  `json:"geoip_enabled"`
+	PadSC               uint8  `json:"-"`
+	BotnetNewIPThreshold  uint32 `json:"botnet_new_ip_threshold"`
+	BotnetCooldownSeconds uint32 `json:"botnet_cooldown_seconds"`
+	BotnetModeActive      uint8  `json:"botnet_mode_active"`
+	PadBN                 [3]uint8 `json:"-"`
 }

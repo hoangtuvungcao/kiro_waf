@@ -19,10 +19,18 @@ import (
 	"time"
 
 	"kiro_waf/internal/client/ban"
+	"kiro_waf/internal/client/cf"
 	"kiro_waf/internal/client/challenge"
 	"kiro_waf/internal/client/cookie"
+	"kiro_waf/internal/client/escalation"
+	"kiro_waf/internal/client/fingerprint"
 	"kiro_waf/internal/client/ratelimit"
 )
+
+// XDPStartupFunc is a hook for starting XDP components (GeoIP loader, botnet controller).
+// It is set by the xdp_startup.go file to avoid import cycles between client and xdp packages.
+// The function receives the context for lifecycle management and the GeoIP CSV path.
+var XDPStartupFunc func(ctx context.Context, geoipCSVPath string)
 
 // clientConfig chứa toàn bộ cấu hình cho Client_WAF.
 type clientConfig struct {
@@ -44,6 +52,16 @@ type clientConfig struct {
 	UpdateSeconds    int
 	AdminIPs         []string
 	ChallengeAllNew  bool
+
+	// New transparent challenge / escalation config
+	TransparentTTL     int // seconds, default: 30
+	CookieShortTTL     int // seconds, default: 300 (5 min)
+	EscalationThreshold int // failure count, default: 3
+	EscalationCooldown int // seconds, default: 600 (10 min)
+	CookieRateLimit    int // requests per minute, default: 300
+	CFTrustMode        string // "strict" or "permissive", default: "strict"
+	XDPBlockedCountries string // comma-separated 2-letter codes
+	GeoIPCSVPath       string // path to GeoLite2 CSV file
 }
 
 // Run is the entry point for the Client_WAF application.
@@ -72,6 +90,11 @@ func Run() int {
 	// Initialize components
 	cookieMgr := cookie.NewHMACCookieManager()
 
+	cookieMgrV2 := cookie.NewCookieManagerV2(
+		[]byte(cfg.CookieSecret),
+		time.Duration(cfg.CookieShortTTL)*time.Second,
+	)
+
 	rateLimiter := ratelimit.NewSlidingWindowLimiter(ratelimit.LimiterConfig{
 		SoftThreshold:   cfg.RPMPerIP,
 		HardThreshold:   cfg.HardBlockAfter,
@@ -79,9 +102,26 @@ func Run() int {
 		WindowDuration:  60 * time.Second,
 	})
 
+	cookieRateLimiter := ratelimit.NewCookieRateLimiter(ratelimit.CookieRateLimiterConfig{
+		Threshold: cfg.CookieRateLimit,
+		Window:    60 * time.Second,
+	})
+
 	banEngine := ban.NewInMemoryBanEngine(cfg.BlocklistFile, cfg.XDPSyncCommand)
 
 	challengeStore := challenge.NewStore()
+
+	escalationEngine := escalation.NewEscalationEngine(escalation.EscalationConfig{
+		FailureThreshold: cfg.EscalationThreshold,
+		FailureWindow:    5 * time.Minute,
+		CooldownDuration: time.Duration(cfg.EscalationCooldown) * time.Second,
+	}, cfg.AdminIPs)
+
+	cfExtractor := cf.NewCFExtractor(cfg.CFTrustMode)
+
+	tlsExtractor := fingerprint.NewTLSExtractor()
+
+	loopDetector := challenge.NewLoopDetector()
 
 	lockdownMgr := NewLockdownManager(cfg.AdminIPs)
 
@@ -89,18 +129,27 @@ func Run() int {
 		ProxyConfig{
 			BackendURL:      cfg.BackendURL,
 			CookieSecret:    []byte(cfg.CookieSecret),
-			CookieTTL:       20 * time.Minute,
+			CookieTTL:       time.Duration(cfg.CookieShortTTL) * time.Second,
 			Difficulty:      cfg.PoWDifficulty,
 			HoldSeconds:     cfg.HoldSeconds,
 			BanDuration:     time.Duration(cfg.BlockTTLSeconds) * time.Second,
 			ChallengeTTL:    90 * time.Second,
 			ChallengeAllNew: cfg.ChallengeAllNew,
+			TransparentTTL:  time.Duration(cfg.TransparentTTL) * time.Second,
 		},
 		cookieMgr,
 		rateLimiter,
 		banEngine,
 		challengeStore,
 	)
+
+	// Wire new components into proxy handler
+	proxyHandler.escalationEng = escalationEngine
+	proxyHandler.cookieMgrV2 = cookieMgrV2
+	proxyHandler.cookieLimiter = cookieRateLimiter
+	proxyHandler.cfExtractor = cfExtractor
+	proxyHandler.tlsExtractor = tlsExtractor
+	proxyHandler.loopDetector = loopDetector
 
 	// Context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -154,6 +203,54 @@ func Run() int {
 			}
 		}
 	}()
+
+	// Periodic escalation engine cleanup (every 5 minutes)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				escalationEngine.Cleanup()
+			}
+		}
+	}()
+
+	// Periodic cookie rate limiter cleanup (every 2 minutes)
+	go func() {
+		ticker := time.NewTicker(2 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				cookieRateLimiter.Cleanup()
+			}
+		}
+	}()
+
+	// Periodic loop detector cleanup (every 30 seconds)
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				loopDetector.Cleanup()
+			}
+		}
+	}()
+
+	// Wire XDP components if XDP is enabled (XDPSyncCommand is set)
+	xdpEnabled := cfg.XDPSyncCommand != ""
+	if xdpEnabled && XDPStartupFunc != nil {
+		XDPStartupFunc(ctx, cfg.GeoIPCSVPath)
+	}
 
 	// Register HTTP routes
 	mux := http.NewServeMux()
@@ -243,6 +340,16 @@ func loadConfig() clientConfig {
 		UpdateSeconds:    envInt("KIRO_UPDATE_SECONDS", 300),
 		AdminIPs:         adminIPs,
 		ChallengeAllNew:  os.Getenv("KIRO_CHALLENGE_ALL_NEW") == "true" || os.Getenv("KIRO_CHALLENGE_ALL_NEW") == "1",
+
+		// New transparent challenge / escalation config
+		TransparentTTL:      envInt("KIRO_TRANSPARENT_TTL", 30),
+		CookieShortTTL:      envInt("KIRO_COOKIE_SHORT_TTL", 300),
+		EscalationThreshold: envInt("KIRO_ESCALATION_THRESHOLD", 3),
+		EscalationCooldown:  envInt("KIRO_ESCALATION_COOLDOWN", 600),
+		CookieRateLimit:     envInt("KIRO_COOKIE_RATE_LIMIT", 300),
+		CFTrustMode:         envDefault("KIRO_CF_TRUST_MODE", "strict"),
+		XDPBlockedCountries: envDefault("KIRO_XDP_BLOCKED_COUNTRIES", ""),
+		GeoIPCSVPath:        envDefault("KIRO_GEOIP_CSV_PATH", ""),
 	}
 }
 

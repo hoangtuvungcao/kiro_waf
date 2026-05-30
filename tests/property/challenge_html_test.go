@@ -23,8 +23,13 @@ import (
 // urlPattern matches http:// and https:// URLs in HTML content.
 var urlPattern = regexp.MustCompile(`https?://[^\s"'<>]+`)
 
-// isInternalURL checks if a URL is an internal /__kiro/ reference.
+// isInternalURL checks if a URL is an internal /__kiro/ reference or a standard namespace.
 func isInternalURL(url string) bool {
+	// SVG namespace declarations are required by the SVG spec and are not external dependencies.
+	// Browsers do not make network requests for xmlns declarations.
+	if url == "http://www.w3.org/2000/svg" {
+		return true
+	}
 	// Internal references use relative paths like "/__kiro/challenge/verify"
 	// They should not appear as full http(s):// URLs in the HTML.
 	// Any http:// or https:// URL is considered external unless it contains /__kiro/ path.
