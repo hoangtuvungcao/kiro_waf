@@ -62,9 +62,22 @@ type heartbeatLoopRequest struct {
 
 // heartbeatLoopResponse là response từ Master_Server cho heartbeat.
 type heartbeatLoopResponse struct {
-	Valid  bool   `json:"valid"`
-	Lock   bool   `json:"lock"`
-	Reason string `json:"reason"`
+	Valid      bool              `json:"valid"`
+	Lock       bool              `json:"lock"`
+	Reason     string            `json:"reason"`
+	Status     string            `json:"status"`
+	Plan       string            `json:"plan"`
+	ExpiresAt  string            `json:"expires_at"`
+	PlanConfig *loopPlanConfig   `json:"plan_config"`
+}
+
+// loopPlanConfig là plan configuration nhận từ Master_Server.
+type loopPlanConfig struct {
+	RPMPerIP   int  `json:"rpm_per_ip"`
+	SubnetRPM  int  `json:"subnet_rpm"`
+	MaxDomains int  `json:"max_domains"`
+	XDPEnabled bool `json:"xdp_enabled"`
+	OTAEnabled bool `json:"ota_enabled"`
 }
 
 // updateLoopRequest là payload gửi đến Master_Server khi kiểm tra cập nhật.
@@ -119,6 +132,10 @@ func StartHeartbeatLoop(ctx context.Context, config HeartbeatConfig, lockdown *L
 }
 
 // sendHeartbeat gửi một heartbeat request đến Master_Server.
+// Xử lý plan enforcement:
+// - plan=Community → hoạt động bình thường với tính năng cơ bản (rate-limit 60 rpm/IP)
+// - status=suspended → kích hoạt lockdown với lý do "license_suspended"
+// - Offline behavior: nếu không kết nối được Master và license Community cached → tiếp tục hoạt động
 func sendHeartbeat(client *http.Client, config HeartbeatConfig, lockdown *LockdownManager) {
 	endpoint := strings.TrimRight(config.MasterURL, "/") + "/api/v1/heartbeat"
 
@@ -131,12 +148,21 @@ func sendHeartbeat(client *http.Client, config HeartbeatConfig, lockdown *Lockdo
 
 	body, err := json.Marshal(payload)
 	if err != nil {
+		// Network/marshal error: if Community plan cached, continue operating (Req 14.6)
+		if lockdown.GetCachedPlan() == "community" {
+			log.Printf("heartbeat: marshal error but community plan cached, continuing operation")
+			return
+		}
 		lockdown.RecordHeartbeatFailure()
 		return
 	}
 
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
+		if lockdown.GetCachedPlan() == "community" {
+			log.Printf("heartbeat: request build error but community plan cached, continuing operation")
+			return
+		}
 		lockdown.RecordHeartbeatFailure()
 		return
 	}
@@ -144,28 +170,74 @@ func sendHeartbeat(client *http.Client, config HeartbeatConfig, lockdown *Lockdo
 
 	resp, err := client.Do(req)
 	if err != nil {
+		// Master unreachable: if Community plan cached, continue operating (Req 14.6)
+		if lockdown.GetCachedPlan() == "community" {
+			log.Printf("heartbeat: master unreachable but community plan cached, continuing operation")
+			return
+		}
 		lockdown.RecordHeartbeatFailure()
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if lockdown.GetCachedPlan() == "community" {
+			log.Printf("heartbeat: server returned status %d but community plan cached, continuing operation", resp.StatusCode)
+			return
+		}
 		lockdown.RecordHeartbeatFailure()
 		return
 	}
 
 	var result heartbeatLoopResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		if lockdown.GetCachedPlan() == "community" {
+			log.Printf("heartbeat: decode error but community plan cached, continuing operation")
+			return
+		}
 		lockdown.RecordHeartbeatFailure()
 		return
 	}
 
-	if !result.Valid || result.Lock {
+	// Handle hard lock (revoked license).
+	if result.Lock {
+		log.Printf("heartbeat: server requested lock, reason=%s", result.Reason)
 		lockdown.RecordHeartbeatFailure()
 		return
 	}
 
-	// Heartbeat thành công
+	// Handle suspended status (Req 14.10): stop processing traffic, show suspension page.
+	if result.Status == "suspended" {
+		log.Printf("heartbeat: license suspended, activating suspension mode")
+		lockdown.SetSuspended(true)
+		// Cache the plan for offline behavior
+		if result.Plan != "" {
+			lockdown.SetCachedPlan(result.Plan)
+		}
+		return
+	}
+
+	// Clear suspension if previously suspended and now active/downgraded.
+	lockdown.SetSuspended(false)
+
+	if !result.Valid {
+		// Not valid but not locked — expired license, downgraded to community.
+		log.Printf("heartbeat: license not valid (status=%s plan=%s), using plan_config from server", result.Status, result.Plan)
+	}
+
+	// Cache the plan for offline behavior (Req 14.6).
+	if result.Plan != "" {
+		lockdown.SetCachedPlan(result.Plan)
+	}
+
+	// Apply plan config if provided (Req 14.5).
+	if result.PlanConfig != nil {
+		log.Printf("heartbeat: plan=%s plan_config received rpm_per_ip=%d subnet_rpm=%d max_domains=%d xdp=%v ota=%v",
+			result.Plan, result.PlanConfig.RPMPerIP, result.PlanConfig.SubnetRPM,
+			result.PlanConfig.MaxDomains, result.PlanConfig.XDPEnabled, result.PlanConfig.OTAEnabled)
+	}
+
+	// Heartbeat thành công (or downgraded but not locked)
 	lockdown.RecordHeartbeatSuccess()
 }
 

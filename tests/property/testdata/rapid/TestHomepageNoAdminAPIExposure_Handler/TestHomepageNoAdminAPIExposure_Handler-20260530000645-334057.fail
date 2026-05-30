@@ -1,0 +1,9 @@
+# 2026/05/30 00:06:45.168543 [TestHomepageNoAdminAPIExposure_Handler] [rapid] draw pathSegment: "-"
+# 2026/05/30 00:06:45.168572 [TestHomepageNoAdminAPIExposure_Handler] Homepage HTML (served at /) contains forbidden pattern "/admin"
+# 
+v0.4.8#7316887440002826390
+0x0
+0x0
+0x0
+0x0
+0x0

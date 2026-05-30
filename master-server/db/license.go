@@ -269,3 +269,13 @@ func generateKey() (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
+
+// UpdateLicenseStatus updates the status field of a license by its license_id.
+func (d *DB) UpdateLicenseStatus(licenseID string, status string) error {
+	query := `UPDATE licenses SET status = ? WHERE license_id = ?`
+	_, err := d.conn.Exec(query, status, licenseID)
+	if err != nil {
+		return fmt.Errorf("db: update license status: %w", err)
+	}
+	return nil
+}

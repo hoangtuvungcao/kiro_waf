@@ -1,0 +1,23 @@
+# 2026/05/29 21:23:01.876772 [TestChallengePageNoExternalDeps_PoW] [rapid] draw ip_octet1: 1
+# 2026/05/29 21:23:01.876778 [TestChallengePageNoExternalDeps_PoW] [rapid] draw ip_octet2: 0
+# 2026/05/29 21:23:01.876779 [TestChallengePageNoExternalDeps_PoW] [rapid] draw ip_octet3: 0
+# 2026/05/29 21:23:01.876780 [TestChallengePageNoExternalDeps_PoW] [rapid] draw ip_octet4: 1
+# 2026/05/29 21:23:01.876781 [TestChallengePageNoExternalDeps_PoW] [rapid] draw difficulty: 1
+# 2026/05/29 21:23:01.876822 [TestChallengePageNoExternalDeps_PoW] PoW challenge page contains external URLs (clientIP=1.0.0.1, difficulty=1): [http://www.w3.org/2000/svg]
+# 
+v0.4.8#12407335299178323564
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

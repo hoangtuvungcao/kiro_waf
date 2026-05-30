@@ -1,0 +1,61 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>{{if .IsEdit}}Sửa License{{else}}Tạo License Mới{{end}}</h1>
+    <p>{{if .IsEdit}}Cập nhật thông tin license{{else}}Điền thông tin để tạo license mới{{end}}</p>
+</div>
+
+<div class="card" style="max-width: 720px;">
+    <form method="POST" action="{{if .IsEdit}}/admin/licenses/{{.License.ID}}/edit{{else}}/admin/licenses{{end}}">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="customer_id">Customer ID</label>
+                <input type="text" id="customer_id" name="customer_id" value="{{.License.CustomerID}}" required placeholder="VD: cust-001">
+            </div>
+            <div class="form-group">
+                <label for="customer_name">Tên khách hàng</label>
+                <input type="text" id="customer_name" name="customer_name" value="{{.License.CustomerName}}" required placeholder="VD: Công ty ABC">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="plan">Gói dịch vụ</label>
+                <select id="plan" name="plan">
+                    <option value="community" {{if eq .License.Plan "community"}}selected{{end}}>Community</option>
+                    <option value="pro" {{if eq .License.Plan "pro"}}selected{{end}}>Pro</option>
+                    <option value="enterprise" {{if eq .License.Plan "enterprise"}}selected{{end}}>Enterprise</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="valid_days">Số ngày hiệu lực</label>
+                <input type="number" id="valid_days" name="valid_days" value="{{if .IsEdit}}{{.License.ValidDays}}{{else}}365{{end}}" min="1" max="3650" required>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="client_ip">IP Client (tùy chọn)</label>
+                <input type="text" id="client_ip" name="client_ip" value="{{.License.ClientIP}}" placeholder="VD: 1.2.3.4">
+            </div>
+            <div class="form-group">
+                <label for="status">Trạng thái</label>
+                <select id="status" name="status">
+                    <option value="active" {{if eq .License.Status "active"}}selected{{end}}>Active</option>
+                    <option value="suspended" {{if eq .License.Status "suspended"}}selected{{end}}>Suspended</option>
+                    <option value="revoked" {{if eq .License.Status "revoked"}}selected{{end}}>Revoked</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="notes">Ghi chú</label>
+            <textarea id="notes" name="notes" rows="3" placeholder="Ghi chú nội bộ...">{{.License.Notes}}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{{if .IsEdit}}Cập nhật{{else}}Tạo License{{end}}</button>
+            <a href="/admin/licenses" class="btn btn-secondary">Hủy</a>
+        </div>
+    </form>
+</div>
+{{end}}

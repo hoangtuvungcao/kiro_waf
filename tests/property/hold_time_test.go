@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"kiro_waf/client-node/challenge"
+	"kiro_waf/internal/client/challenge"
 
 	"pgregory.net/rapid"
 )

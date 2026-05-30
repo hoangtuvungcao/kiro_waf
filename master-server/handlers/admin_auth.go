@@ -176,13 +176,13 @@ func HandleAdminLogin(database *db.DB, config *AdminAuthConfig) http.HandlerFunc
 			return
 		}
 
-		// Set session cookie: HttpOnly, SameSite=Strict, Secure, with TTL.
+		// Set session cookie: HttpOnly, SameSite=Lax (allows Cloudflare redirects), Secure, with TTL.
 		http.SetCookie(w, &http.Cookie{
 			Name:     sessionCookieName,
 			Value:    token,
 			Path:     "/admin",
 			HttpOnly: true,
-			SameSite: http.SameSiteStrictMode,
+			SameSite: http.SameSiteLaxMode,
 			Secure:   true,
 			MaxAge:   int(ttl.Seconds()),
 		})
@@ -242,7 +242,7 @@ func clearSessionCookie(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/admin",
 		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 		Secure:   true,
 		MaxAge:   -1,
 	})

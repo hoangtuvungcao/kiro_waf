@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"testing"
 
-	"kiro_waf/client-node/ua"
+	"kiro_waf/internal/client/ua"
 
 	"pgregory.net/rapid"
 )

@@ -283,8 +283,8 @@ func TestHandleAdminLogin_POST_ValidKey(t *testing.T) {
 	if !sessionCookie.HttpOnly {
 		t.Error("expected HttpOnly cookie")
 	}
-	if sessionCookie.SameSite != http.SameSiteStrictMode {
-		t.Error("expected SameSite=Strict cookie")
+	if sessionCookie.SameSite != http.SameSiteLaxMode {
+		t.Error("expected SameSite=Lax cookie")
 	}
 	if sessionCookie.MaxAge != int((12 * time.Hour).Seconds()) {
 		t.Errorf("expected MaxAge %d, got %d", int((12*time.Hour).Seconds()), sessionCookie.MaxAge)

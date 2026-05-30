@@ -1,6 +1,7 @@
 package diagnostics
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -127,5 +128,237 @@ func testRuntime(dir string) config.RuntimeConfig {
 				RedactSecrets: true,
 			},
 		},
+	}
+}
+
+// --- Tests for BuildStatus ---
+
+func TestBuildStatus_ReturnsCorrectFields(t *testing.T) {
+	dir := t.TempDir()
+	runtime := testRuntime(dir)
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	status := BuildStatus(runtime, now)
+
+	if status.Mode != "full" {
+		t.Errorf("status.Mode = %q, want 'full'", status.Mode)
+	}
+	if status.Version == "" {
+		t.Error("status.Version is empty")
+	}
+	if status.GeneratedAt != "2026-06-01T12:00:00Z" {
+		t.Errorf("status.GeneratedAt = %q, want '2026-06-01T12:00:00Z'", status.GeneratedAt)
+	}
+	if status.Plan != "school_smb" {
+		t.Errorf("status.Plan = %q, want 'school_smb'", status.Plan)
+	}
+	if status.Sites != 1 {
+		t.Errorf("status.Sites = %d, want 1", status.Sites)
+	}
+}
+
+func TestBuildStatus_ServerMode(t *testing.T) {
+	dir := t.TempDir()
+	runtime := testRuntime(dir)
+	runtime.Mode = "server"
+	runtime.Sites = nil
+	status := BuildStatus(runtime, time.Now())
+
+	if status.Mode != "server" {
+		t.Errorf("status.Mode = %q, want 'server'", status.Mode)
+	}
+	if status.ProxyEnabled {
+		t.Error("ProxyEnabled should be false in server mode")
+	}
+}
+
+func TestBuildStatus_ZeroTime(t *testing.T) {
+	dir := t.TempDir()
+	runtime := testRuntime(dir)
+	status := BuildStatus(runtime, time.Time{})
+	if status.GeneratedAt == "" {
+		t.Error("GeneratedAt should be set even with zero time input")
+	}
+}
+
+// --- Tests for BuildSystemReport ---
+
+func TestBuildSystemReport_ReturnsCorrectFields(t *testing.T) {
+	dir := t.TempDir()
+	runtime := testRuntime(dir)
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	report := BuildSystemReport(runtime, now)
+
+	if report.Version == "" {
+		t.Error("report.Version is empty")
+	}
+	if report.GoVersion == "" {
+		t.Error("report.GoVersion is empty")
+	}
+	if report.OS == "" {
+		t.Error("report.OS is empty")
+	}
+	if report.Arch == "" {
+		t.Error("report.Arch is empty")
+	}
+	if report.NumCPU == 0 {
+		t.Error("report.NumCPU is 0")
+	}
+	if report.Config.Mode != "full" {
+		t.Errorf("report.Config.Mode = %q, want 'full'", report.Config.Mode)
+	}
+	if report.GeneratedAt != "2026-06-01T12:00:00Z" {
+		t.Errorf("report.GeneratedAt = %q", report.GeneratedAt)
+	}
+}
+
+func TestBuildSystemReport_ZeroTime(t *testing.T) {
+	dir := t.TempDir()
+	runtime := testRuntime(dir)
+	report := BuildSystemReport(runtime, time.Time{})
+	if report.GeneratedAt == "" {
+		t.Error("GeneratedAt should be set even with zero time input")
+	}
+}
+
+// --- Tests for MarshalJSON ---
+
+func TestMarshalJSON_ProducesValidJSON(t *testing.T) {
+	dir := t.TempDir()
+	runtime := testRuntime(dir)
+	status := BuildStatus(runtime, time.Now())
+
+	data, err := MarshalJSON(status)
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("MarshalJSON returned empty data")
+	}
+	// Verify it's valid JSON
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("MarshalJSON output is not valid JSON: %v", err)
+	}
+}
+
+// --- Tests for mode checks ---
+
+func TestModeCheck_ValidModes(t *testing.T) {
+	for _, mode := range []string{"server", "full"} {
+		runtime := config.RuntimeConfig{Mode: mode}
+		check := modeCheck(runtime)
+		if check.Status != "pass" {
+			t.Errorf("modeCheck(%q) status = %q, want 'pass'", mode, check.Status)
+		}
+	}
+}
+
+func TestModeCheck_InvalidMode(t *testing.T) {
+	runtime := config.RuntimeConfig{Mode: "invalid"}
+	check := modeCheck(runtime)
+	if check.Status != "fail" {
+		t.Errorf("modeCheck('invalid') status = %q, want 'fail'", check.Status)
+	}
+}
+
+// --- Tests for firewall safety check ---
+
+func TestFirewallSafetyCheck_Disabled(t *testing.T) {
+	runtime := config.RuntimeConfig{Firewall: config.RuntimeFirewall{Enabled: false}}
+	check := firewallSafetyCheck(runtime)
+	if check.Status != "warn" {
+		t.Errorf("firewallSafetyCheck(disabled) status = %q, want 'warn'", check.Status)
+	}
+}
+
+func TestFirewallSafetyCheck_SSHAdminOnlyWithoutCIDRs(t *testing.T) {
+	runtime := config.RuntimeConfig{
+		Firewall: config.RuntimeFirewall{
+			Enabled:      true,
+			SSHAdminOnly: true,
+			AdminCIDRs:   nil,
+		},
+	}
+	check := firewallSafetyCheck(runtime)
+	if check.Status != "fail" {
+		t.Errorf("firewallSafetyCheck(ssh_admin_only without CIDRs) status = %q, want 'fail'", check.Status)
+	}
+}
+
+// --- Tests for full mode check ---
+
+func TestFullModeCheck_ServerMode(t *testing.T) {
+	runtime := config.RuntimeConfig{Mode: "server"}
+	check := fullModeCheck(runtime)
+	if check.Status != "pass" {
+		t.Errorf("fullModeCheck(server) status = %q, want 'pass'", check.Status)
+	}
+}
+
+func TestFullModeCheck_FullModeWithoutSites(t *testing.T) {
+	runtime := config.RuntimeConfig{Mode: "full", Sites: nil}
+	check := fullModeCheck(runtime)
+	if check.Status != "fail" {
+		t.Errorf("fullModeCheck(full without sites) status = %q, want 'fail'", check.Status)
+	}
+}
+
+// --- Tests for privacy check ---
+
+func TestPrivacyCheck_SendsRequestBody(t *testing.T) {
+	runtime := config.RuntimeConfig{
+		Telemetry: config.RuntimeTelemetry{
+			Privacy: config.RuntimePrivacy{SendRequestBody: true, RedactSecrets: true},
+		},
+	}
+	check := privacyCheck(runtime)
+	if check.Status != "fail" {
+		t.Errorf("privacyCheck(SendRequestBody) status = %q, want 'fail'", check.Status)
+	}
+}
+
+func TestPrivacyCheck_RedactDisabled(t *testing.T) {
+	runtime := config.RuntimeConfig{
+		Telemetry: config.RuntimeTelemetry{
+			Privacy: config.RuntimePrivacy{RedactSecrets: false},
+		},
+	}
+	check := privacyCheck(runtime)
+	if check.Status != "warn" {
+		t.Errorf("privacyCheck(RedactSecrets=false) status = %q, want 'warn'", check.Status)
+	}
+}
+
+// --- Tests for ShowMode ---
+
+func TestShowMode_ReturnsMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kiro.yaml")
+	if err := os.WriteFile(path, []byte("mode: full\nplan: test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mode, err := ShowMode(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode != "full" {
+		t.Errorf("ShowMode() = %q, want 'full'", mode)
+	}
+}
+
+func TestShowMode_ErrorOnMissingMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kiro.yaml")
+	if err := os.WriteFile(path, []byte("plan: test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ShowMode(path)
+	if err == nil {
+		t.Error("ShowMode should return error when mode is not set")
+	}
+}
+
+func TestShowMode_ErrorOnMissingFile(t *testing.T) {
+	_, err := ShowMode("/nonexistent/path.yaml")
+	if err == nil {
+		t.Error("ShowMode should return error for missing file")
 	}
 }

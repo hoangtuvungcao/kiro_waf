@@ -212,7 +212,7 @@ func jsStringEscape(s string) string {
 }
 
 // powChallengeHTML là template HTML embedded cho trang JS Proof-of-Work challenge.
-// Thiết kế tông tối với branding Kiro, responsive 320px-2560px,
+// Thiết kế teal/blue gradient với branding Kiro, responsive 320px-2560px,
 // chỉ báo tiến trình CSS mượt mà, văn bản tiếng Việt, noscript fallback.
 const powChallengeHTML = `<!DOCTYPE html>
 <html lang="vi">
@@ -220,18 +220,31 @@ const powChallengeHTML = `<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kiro - Xác Thực Truy Cập</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iZmciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTRiOGE2Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzBkOTQ4OCIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHBhdGggZD0iTTE2IDIgTDI4IDcgQzI4IDcgMjkgMTcuNSAyNCAyMyBDMjAuNSAyNyAxNiAzMCAxNiAzMCBDMTYgMzAgMTEuNSAyNyA4IDIzIEMzIDE3LjUgNCA3IDQgNyBaIiBmaWxsPSJ1cmwoI2ZnKSIvPgogIDxwYXRoIGQ9Ik0xNiA1IEwyNiA5IEMyNiA5IDI3IDE3IDIyLjUgMjEuNSBDMTkuNSAyNC41IDE2IDI3IDE2IDI3IEMxNiAyNyAxMi41IDI0LjUgOS41IDIxLjUgQzUgMTcgNiA5IDYgOSBaIiBmaWxsPSIjMGYxNzJhIi8+CiAgPHJlY3QgeD0iMTIiIHk9IjE3IiB3aWR0aD0iOCIgaGVpZ2h0PSI3IiByeD0iMS41IiBmaWxsPSIjMTRiOGE2Ii8+CiAgPHBhdGggZD0iTTEzLjUgMTcgTDEzLjUgMTQuNSBDMTMuNSAxMi41IDE0LjUgMTEuNSAxNiAxMS41IEMxNy41IDExLjUgMTguNSAxMi41IDE4LjUgMTQuNSBMMTguNSAxNyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTRiOGE2IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxjaXJjbGUgY3g9IjE2IiBjeT0iMjAiIHI9IjEuNSIgZmlsbD0iIzBmMTcyYSIvPgogIDxyZWN0IHg9IjE1LjUiIHk9IjIwIiB3aWR0aD0iMSIgaGVpZ2h0PSIyLjUiIHJ4PSIwLjUiIGZpbGw9IiMwZjE3MmEiLz4KPC9zdmc+">
 <style>
 :root {
   color-scheme: dark;
-  --bg: #07100f;
-  --panel: #0f1a17;
-  --line: #29443e;
-  --text: #eef8f5;
-  --muted: #a9bdb7;
-  --green: #67d891;
-  --cyan: #64d8c9;
-  --red: #ff8a8a;
-  --gradient: linear-gradient(135deg, var(--green), var(--cyan));
+  /* Brand tokens — Kiro WAF brand system */
+  --kiro-primary: #0d9488;
+  --kiro-accent: #14b8a6;
+  --kiro-background: #0f0f1a;
+  --kiro-surface: #1a1a2e;
+  --kiro-text-primary: #f0f0f0;
+  --kiro-text-secondary: #a0a0b0;
+  --kiro-border: #2a2a3e;
+  --kiro-success: #10b981;
+  --kiro-danger: #ef4444;
+  --kiro-warning: #f59e0b;
+  /* Derived aliases for backward compat */
+  --bg: var(--kiro-background);
+  --panel: var(--kiro-surface);
+  --line: rgba(13,148,136,0.25);
+  --text: var(--kiro-text-primary);
+  --muted: var(--kiro-text-secondary);
+  --teal: var(--kiro-accent);
+  --blue: #0ea5e9;
+  --red: var(--kiro-danger);
+  --gradient: linear-gradient(135deg, var(--kiro-primary), #0284c7);
 }
 
 * {
@@ -245,7 +258,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 0%, #17302b 0%, #07100f 50%, #050807 100%);
+  background: radial-gradient(ellipse at 50% 0%, #1e3a4a 0%, #0f172a 50%, #0b1120 100%);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Oxygen, Ubuntu, sans-serif;
   line-height: 1.5;
@@ -262,26 +275,26 @@ body {
 
 .card {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(15, 26, 23, 0.97);
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.95);
   padding: 32px 28px;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(103, 216, 145, 0.04);
-  backdrop-filter: blur(8px);
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(13, 148, 136, 0.06);
+  backdrop-filter: blur(12px);
 }
 
 .logo {
   width: 48px;
   height: 48px;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--gradient);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 900;
   font-size: 1.4rem;
-  color: #06100e;
+  color: #fff;
   margin-bottom: 20px;
-  box-shadow: 0 4px 16px rgba(100, 216, 201, 0.2);
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.3);
 }
 
 h1 {
@@ -305,7 +318,7 @@ h1 {
 .progress-bar {
   height: 8px;
   border-radius: 100px;
-  background: rgba(8, 17, 15, 0.8);
+  background: rgba(15, 23, 42, 0.8);
   border: 1px solid var(--line);
   overflow: hidden;
   position: relative;
@@ -345,7 +358,7 @@ h1 {
 }
 
 .status-text {
-  color: var(--green);
+  color: var(--teal);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -356,7 +369,7 @@ h1 {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--teal);
   animation: pulse 1.2s infinite;
 }
 
@@ -374,20 +387,20 @@ h1 {
   color: var(--red);
   margin-top: 16px;
   padding: 12px 16px;
-  border-radius: 8px;
-  background: rgba(255, 138, 138, 0.08);
-  border: 1px solid rgba(255, 138, 138, 0.2);
+  border-radius: 10px;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.2);
   font-size: 0.9rem;
   display: none;
 }
 
 .success-msg {
-  color: var(--green);
+  color: var(--teal);
   margin-top: 16px;
   padding: 12px 16px;
-  border-radius: 8px;
-  background: rgba(103, 216, 145, 0.08);
-  border: 1px solid rgba(103, 216, 145, 0.2);
+  border-radius: 10px;
+  background: rgba(20, 184, 166, 0.08);
+  border: 1px solid rgba(20, 184, 166, 0.2);
   font-size: 0.9rem;
   display: none;
 }
@@ -403,9 +416,9 @@ h1 {
 
 noscript .noscript-box {
   padding: 20px;
-  border-radius: 8px;
-  background: rgba(255, 138, 138, 0.08);
-  border: 1px solid rgba(255, 138, 138, 0.2);
+  border-radius: 10px;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.2);
   text-align: center;
 }
 

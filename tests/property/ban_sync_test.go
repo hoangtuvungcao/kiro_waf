@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"kiro_waf/client-node/ban"
+	"kiro_waf/internal/client/ban"
 
 	"pgregory.net/rapid"
 )

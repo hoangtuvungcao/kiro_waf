@@ -1,0 +1,23 @@
+# 2026/05/29 21:23:01.879210 [TestChallengePageNoExternalDeps_Hold] [rapid] draw ip_octet1: 1
+# 2026/05/29 21:23:01.879214 [TestChallengePageNoExternalDeps_Hold] [rapid] draw ip_octet2: 0
+# 2026/05/29 21:23:01.879215 [TestChallengePageNoExternalDeps_Hold] [rapid] draw ip_octet3: 0
+# 2026/05/29 21:23:01.879216 [TestChallengePageNoExternalDeps_Hold] [rapid] draw ip_octet4: 1
+# 2026/05/29 21:23:01.879217 [TestChallengePageNoExternalDeps_Hold] [rapid] draw holdSeconds: 1
+# 2026/05/29 21:23:01.879246 [TestChallengePageNoExternalDeps_Hold] Hold captcha page contains external URLs (clientIP=1.0.0.1, holdSeconds=1): [http://www.w3.org/2000/svg]
+# 
+v0.4.8#16473849577608866951
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

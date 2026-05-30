@@ -4,11 +4,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
-source_path="${1:-ebpf/xdp/kiro_xdp_drop.c}"
-output_path="${2:-build/ebpf/kiro_xdp_drop.o}"
+source_path="${1:-internal/client/xdp/xdp_filter.c}"
+output_path="${2:-build/xdp_filter.o}"
 target_arch="${KIRO_XDP_TARGET_ARCH:-x86}"
 clang_bin="${CLANG:-clang}"
 include_args=()
+
+if [ ! -f "${source_path}" ]; then
+  echo "ERROR: XDP source file not found: ${source_path}" >&2
+  exit 1
+fi
 
 case "$(uname -m)" in
   x86_64)
@@ -30,7 +35,7 @@ mkdir -p "$(dirname "${output_path}")"
   -g \
   -target bpf \
   -D"__TARGET_ARCH_${target_arch}" \
-  "${include_args[@]}" \
+  ${include_args[@]+"${include_args[@]}"} \
   -Wall \
   -Werror \
   -c "${source_path}" \

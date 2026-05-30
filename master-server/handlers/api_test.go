@@ -173,8 +173,13 @@ func TestHandleHeartbeat_ExpiredLicense(t *testing.T) {
 	if resp.Valid {
 		t.Error("expected valid = false for expired license")
 	}
-	if !resp.Lock {
-		t.Error("expected lock = true for expired license")
+	if resp.Lock {
+		t.Error("expected lock = false for expired license (downgraded to community)")
+	}
+	if resp.PlanConfig == nil {
+		t.Error("expected plan_config to be set for expired license (community downgrade)")
+	} else if resp.PlanConfig.RPMPerIP != 60 {
+		t.Errorf("expected community rpm_per_ip = 60, got %d", resp.PlanConfig.RPMPerIP)
 	}
 }
 

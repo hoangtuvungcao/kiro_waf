@@ -39,8 +39,8 @@ func TestRenderDashboard(t *testing.T) {
 		"Tổng quan hệ thống",
 		"Tổng License",
 		"Node Hoạt Động",
-		"Heartbeat Gần Đây",
-		"Tình Trạng Hệ Thống",
+		"Heartbeat Hôm Nay",
+		"License Hoạt Động",
 		"node-1",
 		"1.2.3.4",
 	}

@@ -44,6 +44,8 @@ func main() {
 		runIncident(os.Args[2:])
 	case "pilot":
 		runPilot(os.Args[2:])
+	case "report":
+		runReport(os.Args[2:])
 	default:
 		usage()
 	}
@@ -501,7 +503,18 @@ func runUpdate(args []string) {
 	}
 }
 
+func runReport(args []string) {
+	cmd := flag.NewFlagSet("kiro-cli report", flag.ExitOnError)
+	configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+	if err := cmd.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	runtime := mustLoadRuntime(*configPath)
+	report := diagnostics.BuildSystemReport(runtime, time.Now().UTC())
+	writeJSON(report)
+}
+
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: kiro-cli version | status | health | preflight | mode show|set | install plan|stage-lab|apply-lab|uninstall-plan|uninstall-apply-lab | update check|apply|rollback | incident report | pilot report | license fingerprint [--salt ID]")
+	fmt.Fprintln(os.Stderr, "usage: kiro-cli version | status | health | preflight | mode show|set | install plan|stage-lab|apply-lab|uninstall-plan|uninstall-apply-lab | update check|apply|rollback | report | incident report | pilot report | license fingerprint [--salt ID]")
 	os.Exit(2)
 }

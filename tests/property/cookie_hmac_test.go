@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"kiro_waf/client-node/cookie"
+	"kiro_waf/internal/client/cookie"
 
 	"pgregory.net/rapid"
 )

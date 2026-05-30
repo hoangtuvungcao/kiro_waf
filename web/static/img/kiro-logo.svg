@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#0d9488"/>
+    </linearGradient>
+    <linearGradient id="innerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0d9488" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#0d9488" stop-opacity="0.1"/>
+    </linearGradient>
+    <linearGradient id="lockGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#0d9488"/>
+    </linearGradient>
+  </defs>
+  <!-- Shield outline -->
+  <path d="M256 28 L456 108 C456 108 468 280 380 380 C320 440 256 484 256 484 C256 484 192 440 132 380 C44 280 56 108 56 108 Z"
+        fill="url(#shieldGrad)" stroke="none"/>
+  <!-- Shield inner area -->
+  <path d="M256 60 L428 128 C428 128 438 276 362 364 C310 416 256 452 256 452 C256 452 202 416 150 364 C74 276 84 128 84 128 Z"
+        fill="#0f172a"/>
+  <!-- Inner shield highlight -->
+  <path d="M256 60 L428 128 C428 128 438 276 362 364 C310 416 256 452 256 452 C256 452 202 416 150 364 C74 276 84 128 84 128 Z"
+        fill="url(#innerGrad)"/>
+  <!-- Network nodes - top -->
+  <circle cx="256" cy="160" r="12" fill="#14b8a6"/>
+  <!-- Network nodes - middle row -->
+  <circle cx="196" cy="220" r="10" fill="#14b8a6" opacity="0.8"/>
+  <circle cx="316" cy="220" r="10" fill="#14b8a6" opacity="0.8"/>
+  <!-- Network nodes - bottom row -->
+  <circle cx="176" cy="300" r="8" fill="#14b8a6" opacity="0.6"/>
+  <circle cx="256" cy="300" r="8" fill="#14b8a6" opacity="0.6"/>
+  <circle cx="336" cy="300" r="8" fill="#14b8a6" opacity="0.6"/>
+  <!-- Network connections -->
+  <line x1="256" y1="160" x2="196" y2="220" stroke="#14b8a6" stroke-width="2.5" opacity="0.7"/>
+  <line x1="256" y1="160" x2="316" y2="220" stroke="#14b8a6" stroke-width="2.5" opacity="0.7"/>
+  <line x1="196" y1="220" x2="176" y2="300" stroke="#14b8a6" stroke-width="2" opacity="0.5"/>
+  <line x1="196" y1="220" x2="256" y2="300" stroke="#14b8a6" stroke-width="2" opacity="0.5"/>
+  <line x1="316" y1="220" x2="256" y2="300" stroke="#14b8a6" stroke-width="2" opacity="0.5"/>
+  <line x1="316" y1="220" x2="336" y2="300" stroke="#14b8a6" stroke-width="2" opacity="0.5"/>
+  <line x1="196" y1="220" x2="316" y2="220" stroke="#14b8a6" stroke-width="2" opacity="0.4"/>
+  <!-- Lock body -->
+  <rect x="224" y="320" width="64" height="52" rx="8" ry="8" fill="url(#lockGrad)"/>
+  <!-- Lock shackle -->
+  <path d="M236 320 L236 296 C236 278 248 268 256 268 C264 268 276 278 276 296 L276 320"
+        fill="none" stroke="#14b8a6" stroke-width="8" stroke-linecap="round"/>
+  <!-- Lock keyhole -->
+  <circle cx="256" cy="342" r="8" fill="#0f172a"/>
+  <rect x="253" y="342" width="6" height="14" rx="3" fill="#0f172a"/>
+  <!-- Subtle glow effect on shield edge -->
+  <path d="M256 28 L456 108 C456 108 468 280 380 380 C320 440 256 484 256 484 C256 484 192 440 132 380 C44 280 56 108 56 108 Z"
+        fill="none" stroke="#14b8a6" stroke-width="2" opacity="0.4"/>
+</svg>

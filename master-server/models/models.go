@@ -62,3 +62,30 @@ type AdminLoginAttempt struct {
 	Success     bool      `json:"success"`
 	AttemptedAt time.Time `json:"attempted_at"`
 }
+
+// PlanConfig defines the limits for each license plan.
+type PlanConfig struct {
+	Name        string `json:"name"`
+	RPMPerIP    int    `json:"rpm_per_ip"`    // Rate limit per IP per minute
+	SubnetRPM   int    `json:"subnet_rpm"`    // Rate limit per /24 subnet
+	MaxDomains  int    `json:"max_domains"`   // Max protected domains
+	XDPEnabled  bool   `json:"xdp_enabled"`   // XDP kernel protection
+	OTAEnabled  bool   `json:"ota_enabled"`   // Auto-update
+	DefaultDays int    `json:"default_days"`  // Default validity period
+}
+
+// PlanConfigs maps plan names to their configurations.
+var PlanConfigs = map[string]PlanConfig{
+	"community": {
+		Name: "Community", RPMPerIP: 60, SubnetRPM: 600,
+		MaxDomains: 1, XDPEnabled: false, OTAEnabled: false, DefaultDays: 30,
+	},
+	"pro": {
+		Name: "Pro", RPMPerIP: 120, SubnetRPM: 1800,
+		MaxDomains: 5, XDPEnabled: true, OTAEnabled: true, DefaultDays: 365,
+	},
+	"enterprise": {
+		Name: "Enterprise", RPMPerIP: 0, SubnetRPM: 0, // 0 = unlimited
+		MaxDomains: 0, XDPEnabled: true, OTAEnabled: true, DefaultDays: 3650, // 0 = unlimited
+	},
+}

@@ -218,3 +218,110 @@ func TestLockdownManager_NilAdminIPs(t *testing.T) {
 		t.Error("no IPs should be admin when list is nil")
 	}
 }
+
+func TestLockdownManager_Suspended(t *testing.T) {
+	lm := NewLockdownManager(nil)
+
+	// Initially not suspended
+	if lm.IsSuspended() {
+		t.Error("should not be suspended initially")
+	}
+
+	// Set suspended
+	lm.SetSuspended(true)
+	if !lm.IsSuspended() {
+		t.Error("should be suspended after SetSuspended(true)")
+	}
+
+	// Clear suspended
+	lm.SetSuspended(false)
+	if lm.IsSuspended() {
+		t.Error("should not be suspended after SetSuspended(false)")
+	}
+}
+
+func TestLockdownManager_CachedPlan(t *testing.T) {
+	lm := NewLockdownManager(nil)
+
+	// Initially empty
+	if plan := lm.GetCachedPlan(); plan != "" {
+		t.Errorf("expected empty cached plan, got %q", plan)
+	}
+
+	// Set cached plan
+	lm.SetCachedPlan("community")
+	if plan := lm.GetCachedPlan(); plan != "community" {
+		t.Errorf("expected cached plan 'community', got %q", plan)
+	}
+
+	// Update cached plan
+	lm.SetCachedPlan("pro")
+	if plan := lm.GetCachedPlan(); plan != "pro" {
+		t.Errorf("expected cached plan 'pro', got %q", plan)
+	}
+}
+
+func TestLockdownManager_SuspendedIndependentOfLocked(t *testing.T) {
+	lm := NewLockdownManager(nil)
+
+	// Suspended and locked are independent states
+	lm.SetSuspended(true)
+	if lm.IsLocked() {
+		t.Error("suspended should not imply locked")
+	}
+
+	lm.Lock("test")
+	if !lm.IsSuspended() {
+		t.Error("locking should not clear suspended")
+	}
+	if !lm.IsLocked() {
+		t.Error("should be locked")
+	}
+
+	lm.Unlock()
+	if !lm.IsSuspended() {
+		t.Error("unlocking should not clear suspended")
+	}
+
+	lm.SetSuspended(false)
+	if lm.IsSuspended() {
+		t.Error("should not be suspended after clearing")
+	}
+}
+
+func TestServeSuspendedPage(t *testing.T) {
+	w := httptest.NewRecorder()
+	ServeSuspendedPage(w)
+
+	if w.Code != 403 {
+		t.Fatalf("expected status 403, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+
+	// Check content type
+	ct := w.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/html") {
+		t.Errorf("expected Content-Type text/html, got %q", ct)
+	}
+
+	// Check Vietnamese text is present
+	if !strings.Contains(body, "Dịch vụ bị tạm ngưng") {
+		t.Error("expected Vietnamese suspension title in page")
+	}
+
+	// Check Kiro branding
+	if !strings.Contains(body, "Kiro WAF") {
+		t.Error("expected Kiro WAF branding in suspended page")
+	}
+
+	// Check suspended status indicator
+	if !strings.Contains(body, "Suspended") {
+		t.Error("expected 'Suspended' text in page")
+	}
+
+	// Check dark theme elements
+	if !strings.Contains(body, "color-scheme: dark") {
+		t.Error("expected dark color scheme in suspended page")
+	}
+}

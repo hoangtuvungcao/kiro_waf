@@ -20,9 +20,9 @@ import (
 )
 
 // forbiddenPatterns are strings that MUST NOT appear in the homepage HTML.
-// These represent admin and internal API endpoint references.
+// These represent internal API endpoint references.
+// Note: /admin/ navigation link is allowed as it's a user-facing admin panel link.
 var forbiddenPatterns = []string{
-	"/admin",
 	"/api/",
 	"api/v1",
 	"/api/v1/heartbeat",

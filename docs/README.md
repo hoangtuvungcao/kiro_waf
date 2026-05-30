@@ -1,61 +1,68 @@
-# Kiro WAF Documentation Index
+# Kiro WAF Documentation
 
-Index này gom lại tài liệu chính để README không phải giữ danh sách quá dài.
-Nếu cần biết dự án đang ở đâu và bước tiếp theo là gì, đọc theo thứ tự dưới
-đây.
+## Overview
 
-## Start Here
+Kiro WAF là hệ thống Web Application Firewall hoàn chỉnh, bảo vệ website từ tầng L3/L4 (XDP/eBPF) đến tầng L7 (reverse proxy + WAF rules). Hệ thống được thiết kế cho VPS Ubuntu, tích hợp Cloudflare, và hỗ trợ quản lý tập trung qua Master Server.
 
-- [Phase roadmap and progress](../PHASES.md): trạng thái phase/task và bằng
-  chứng test gần nhất.
-- [Setup guide](SETUP.md): cài Management Server, Client Node, XDP và API.
-- [Setup Master](SETUP_MASTER.md): cài `firewall.vpsgen.com`, Nginx, systemd,
-  SQLite license DB và Admin/API.
-- [Setup Client](SETUP_CLIENT.md): cài WAF reverse proxy, heartbeat license và
-  XDP object trên server được bảo vệ.
-- [Project structure](PROJECT_STRUCTURE.md): cấu trúc thư mục và ranh giới
-  Management Server/Client Node.
-- [Production gap analysis](vi/40-production-gap-analysis.md): phần đã xong,
-  phần còn thiếu trước khi claim production doanh nghiệp/trường học.
-- [VPS Ubuntu 22.04 test runbook](vi/41-vps-ubuntu-2204-test-runbook.md): upload,
-  build, smoke và benchmark an toàn trên VPS.
-- [Production hardening runbook](vi/42-production-hardening-runbook.md): tách
-  provider/protected server, XDP map sync, domain và giới hạn DDoS thực tế.
-- [VPS homepage/provider-client runbook](vi/43-vps-homepage-provider-client-runbook.md):
-  cài trang chủ, issue license cho VPS và replace XDP có rate-limit.
-- [Management Server enterprise runbook](vi/44-enterprise-management-server-runbook.md):
-  API license, dashboard và setup `firewall.vpsgen.com`.
-- [XDP/eBPF VPS runbook](vi/39-xdp-ebpf-vps-runbook.md): build object, plan,
-  attach lab có ACK và rollback.
+## Architecture Diagram
 
-## Core Vietnamese Docs
+```mermaid
+graph TB
+    Internet[Internet Traffic] --> CF[Cloudflare Edge]
+    CF --> XDP[XDP/eBPF Filter - L3/L4]
+    XDP --> NFT[nftables Firewall]
+    NFT --> NGINX[Nginx Reverse Proxy]
+    NGINX --> WAF[WAF Engine - Coraza/ModSecurity]
+    WAF --> BOT[Bot Detection + Challenge]
+    BOT --> RL[Rate Limiter]
+    RL --> Backend[Backend Application]
 
-- [Tổng quan](vi/00-tong-quan.md)
-- [Kiến trúc](vi/01-kien-truc.md)
-- [Threat model và yêu cầu hệ thống](vi/13-threat-model-va-yeu-cau-he-thong.md)
-- [Cấu trúc code và module](vi/14-cau-truc-code-va-module.md)
-- [Production và thương mại readiness](vi/21-production-va-thuong-mai-readiness.md)
-- [PRD/SRS sản phẩm](vi/22-prd-srs-san-pham.md)
-- [Runbook preflight, status và health](vi/29-preflight-status-health-runbook.md)
-- [Runbook benchmark lab](vi/30-benchmark-runbook.md)
-- [Runbook installer và uninstall lab](vi/31-installer-runbook.md)
-- [Runbook provider file API](vi/37-provider-file-api-runbook.md)
-- [Runbook pilot go/no-go](vi/38-pilot-go-no-go-runbook.md)
+    Master[Master Server] -->|License & Updates| Client[Client Node]
+    CLI[kiro-cli] -->|Admin Commands| Client
+    Admin[Admin UI] --> Master
+```
 
-## English Mirrors
+## Documentation Index
 
-- [Production gap analysis](en/33-production-gap-analysis.md)
-- [VPS Ubuntu 22.04 test runbook](en/34-vps-ubuntu-2204-test-runbook.md)
-- [Production hardening runbook](en/35-production-hardening-runbook.md)
-- [VPS homepage/provider-client runbook](en/36-vps-homepage-provider-client-runbook.md)
-- [XDP/eBPF VPS runbook](en/32-xdp-ebpf-vps-runbook.md)
-- [Production and commercial readiness](en/15-production-commercial-readiness.md)
-- [Provider file API runbook](en/30-provider-file-api-runbook.md)
-- [Pilot go/no-go runbook](en/31-pilot-go-no-go-runbook.md)
+| Tài liệu | Mô tả |
+|-----------|--------|
+| [Architecture](./architecture.md) | Kiến trúc hệ thống, data flow, components |
+| [Installation](./installation.md) | Hướng dẫn cài đặt đầy đủ |
+| [Configuration](./configuration.md) | Tham chiếu cấu hình kiro.yaml |
+| [CLI Reference](./cli-reference.md) | Tất cả lệnh CLI với ví dụ |
+| [Deployment](./deployment.md) | Triển khai VPS, Master, Client |
+| [Development](./development.md) | Hướng dẫn phát triển, build, test |
+| [Troubleshooting](./troubleshooting.md) | Xử lý sự cố thường gặp |
+| [Security](./security.md) | Mô hình bảo mật, threat model |
+| [Plans](./plans.md) | Các gói dịch vụ và tính năng |
 
-## Notes
+## Quick Start
 
-- Lab/apply commands that can change firewall, proxy, systemd or XDP state are
-  intentionally guarded by explicit ACK flags.
-- Current safe VPS smoke builds binaries, checks config, runs tests and local
-  benchmark. It does not attach XDP or replace host firewall rules.
+```bash
+# Community plan (miễn phí, tự động đăng ký)
+curl -fsSL https://firewall.vpsgen.com/install.sh | bash
+
+# Pro/Enterprise plan (cần license key)
+curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --key KIRO-XXXX-XXXX
+```
+
+## System Requirements
+
+- Ubuntu 22.04 hoặc 24.04 LTS (x86_64)
+- RAM tối thiểu: 512MB (khuyến nghị 1GB+)
+- Go 1.22+ (để build từ source)
+- clang/llvm (để compile XDP filter)
+
+## Project Repository Structure
+
+```
+kiro_waf/
+├── cmd/                    # Entry points (master, client, cli)
+├── client-node/            # Client WAF logic (proxy, challenge, rate limit)
+├── internal/               # Internal packages
+├── configs/                # Example configuration files
+├── deployments/            # Systemd, nginx, nftables configs
+├── scripts/                # Install & deploy scripts
+├── docs/                   # Documentation (bạn đang ở đây)
+└── build/                  # Build output
+```

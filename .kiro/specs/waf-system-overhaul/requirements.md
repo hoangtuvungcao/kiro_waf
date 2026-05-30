@@ -2,144 +2,274 @@
 
 ## Introduction
 
-Nâng cấp toàn diện hệ thống kiro_waf để đạt trạng thái sẵn sàng cho production với giao diện chuyên nghiệp, cơ chế bảo vệ mạnh mẽ, trang challenge đáng tin cậy, bảng quản trị an toàn, quy trình cập nhật qua CLI, và hệ thống phát hiện/chặn XDP thông minh. Hệ thống bảo vệ các máy chủ Ubuntu 22.04 LTS đơn lẻ chống lại các cuộc tấn công DDoS, botnet, flood, bypass, và tấn công tầng ứng dụng sử dụng kiến trúc phòng thủ nhiều lớp (XDP/eBPF → nftables → reverse proxy WAF → ứng dụng).
-
-Máy chủ VPS quản lý chính: 103.77.246.198 (Ubuntu 22.04) — chạy các dịch vụ quản lý license key, phân phối bản cập nhật, và trang chủ dự án tại `firewall.vpsgen.com`.
+Đại tu toàn diện hệ thống Kiro WAF bao gồm nhận diện thương hiệu, giao diện frontend hiện đại, trực quan hóa dữ liệu động, cài đặt client thông minh, cập nhật OTA, tối ưu hiệu năng XDP/eBPF, tối ưu hiệu năng Golang WAF, tái cấu trúc thư mục, tài liệu dự án, tài liệu người dùng cuối, và xử lý lỗi/ngăn rò rỉ bộ nhớ. Hệ thống bao gồm Master Server (mặt phẳng quản lý/điều khiển tại firewall.vpsgen.com), Client Node (reverse proxy + lọc XDP/eBPF), Admin UI (HTML templates phục vụ bởi Go), và công cụ CLI.
 
 ## Glossary
 
-- **Master_Server**: Máy chủ quản lý (`master-server/main.go`) chạy cơ sở dữ liệu license SQLite, bảng điều khiển admin, trang chủ, và các API endpoint tại `firewall.vpsgen.com`
-- **Client_WAF**: Reverse proxy WAF phía client (`client-node/client_waf.go`) xử lý lọc lưu lượng, JS challenge, hold captcha, giới hạn tốc độ, và đồng bộ blocklist XDP
-- **Admin_Panel**: Giao diện quản trị web chỉ truy cập được qua đường dẫn `/admin` với bảo vệ bằng mật khẩu
-- **Challenge_Page**: Các trang HTML phục vụ cho khách truy cập đáng ngờ, yêu cầu xác minh JS Proof-of-Work hoặc Hold-to-Confirm trước khi truy cập backend
-- **XDP_Filter**: Bộ lọc gói tin eBPF/XDP (`client-node/xdp_filter.c`) hoạt động tại L3/L4 để drop gói tin tốc độ cao
-- **CLI_Tool**: Giao diện dòng lệnh (`kiro-cli`) dùng cho quản trị cục bộ, cập nhật, và chẩn đoán
-- **Update_System**: Cơ chế phân phối phiên bản binary mới từ Master_Server đến các node Client_WAF
-- **Ban_Engine**: Hệ thống con trong Client_WAF chịu trách nhiệm phát hiện IP độc hại và thêm vào danh sách chặn tạm thời hoặc vĩnh viễn
-- **Detection_Engine**: Logic kết hợp của giới hạn tốc độ, phân tích hành vi, chấm điểm User-Agent, và khớp mẫu để nhận diện mối đe dọa
-- **Homepage**: Trang đích công khai tại đường dẫn gốc hiển thị thông tin sản phẩm mà không lộ chức năng quản trị
+- **Master_Server**: Máy chủ quản lý trung tâm tại firewall.vpsgen.com xử lý quản lý license, phân phối bản phát hành, giám sát heartbeat, và admin UI
+- **Client_Node**: WAF reverse proxy biên được triển khai trên các máy chủ được bảo vệ, kết hợp Golang HTTP proxy với lọc gói tin XDP/eBPF
+- **Admin_UI**: Giao diện quản trị dựa trên HTML được phục vụ bởi Master_Server để quản lý license, bản phát hành, và giám sát heartbeat
+- **Install_Script**: Script bash (scripts/install-client.sh) tự động hóa triển khai Client_Node trên máy chủ đích
+- **OTA_Updater**: Hệ thống con cập nhật qua mạng tự động giữ cho binary Client_Node luôn mới nhất mà không cần can thiệp thủ công
+- **XDP_Filter**: Chương trình eBPF/XDP C (xdp_filter.c) thực hiện lọc gói tin L3/L4 ở tốc độ dây trong kernel
+- **WAF_Proxy**: Thành phần reverse proxy Golang trong Client_Node xử lý kiểm tra lưu lượng L7, giới hạn tốc độ, thử thách, và chuyển tiếp yêu cầu
+- **Brand_System**: Hệ thống nhận diện thị giác bao gồm logo, bảng màu, typography, và design token được sử dụng nhất quán trên tất cả giao diện UI
+- **Chart_Engine**: Hệ thống con trực quan hóa dữ liệu phía client hiển thị thống kê, log, và metrics dưới dạng biểu đồ tương tác
+- **Documentation_Site**: Tài liệu công khai phục vụ tại /docs chứa hướng dẫn sử dụng cho người dùng cuối
+- **CLI_Tool**: Công cụ dòng lệnh kiro-cli cung cấp các lệnh quản trị và chẩn đoán hệ thống (version, license, status, health, preflight, mode, install, update, incident, pilot, report)
+- **Health_Monitor**: Hệ thống con kiểm tra sức khỏe liên tục cho XDP_Filter và binary Client_Node, phát hiện sự cố và kích hoạt tự phục hồi
+- **Package_Plan**: Gói dịch vụ do admin cấp cho người dùng, xác định mức độ bảo vệ và tính năng khả dụng (Community, Pro, Enterprise)
+- **Install_UX**: Hệ thống giao diện người dùng trong Install_Script bao gồm progress bar, màu sắc, animation, và thông báo trạng thái trực quan
 
 ## Requirements
 
-### Requirement 1: Tính Đúng Đắn Chức Năng Trang Challenge
+### Yêu Cầu 1: Hệ Thống Nhận Diện Thương Hiệu
 
-**User Story:** Là một khách truy cập bị đánh dấu đáng ngờ, tôi muốn trang JS challenge và hold captcha hoạt động chính xác trên tất cả trình duyệt hiện đại, để tôi có thể chứng minh mình là người thật và truy cập trang web.
+**Câu Chuyện Người Dùng:** Là quản trị viên hệ thống, tôi muốn có nhận diện thương hiệu nhất quán theo phong cách cyber/bảo mật trên tất cả giao diện Kiro WAF, để sản phẩm trông chuyên nghiệp và đáng tin cậy.
 
-#### Acceptance Criteria
+#### Tiêu Chí Chấp Nhận
 
-1. WHEN khách truy cập kích hoạt JS Proof-of-Work challenge, THE Challenge_Page SHALL hiển thị trang chức năng tính toán bằng chứng SHA-256 trong vòng 10 giây trên phần cứng tiêu chuẩn và tự động gửi yêu cầu xác minh
-2. WHEN khách truy cập kích hoạt Hold-to-Confirm captcha, THE Challenge_Page SHALL yêu cầu thời gian giữ tối thiểu 2 giây trước khi chấp nhận xác minh
-3. WHEN xác minh Challenge_Page thành công, THE Client_WAF SHALL đặt cookie truy cập có chữ ký HMAC và chuyển hướng khách truy cập đến URL được yêu cầu ban đầu
-4. IF JavaScript của Challenge_Page không thể thực thi, THEN THE Challenge_Page SHALL hiển thị thông báo dự phòng hướng dẫn khách truy cập bật JavaScript
-5. WHEN Challenge_Page được hiển thị, THE Challenge_Page SHALL hoạt động chính xác trên Chrome, Firefox, Safari, và Edge mà không phụ thuộc CDN bên ngoài
+1. Brand_System PHẢI cung cấp một file logo SVG duy nhất hiển thị không bị pixel hóa hoặc cắt xén ở kích thước từ 16x16 pixel đến 512x512 pixel, chỉ sử dụng phần tử vector (không nhúng ảnh raster)
+2. Brand_System PHẢI định nghĩa bảng màu dựa trên teal với tối thiểu các token CSS custom property sau: primary (#0d9488), accent, background, surface, text-primary, text-secondary, border, success, danger, và warning — mỗi token được gán giá trị hex hoặc rgba cụ thể
+3. Brand_System PHẢI bao gồm tất cả CSS custom property design token trong một stylesheet hoặc style block duy nhất được tải trên mọi trang UI (trang chủ, trang admin, và trang challenge), có thể xác minh bằng sự hiện diện của custom property trên phần tử root của document
+4. KHI Admin_UI tải, Brand_System PHẢI hiển thị logo SVG trong thanh điều hướng và áp dụng color token đã định nghĩa cho navigation, header trang, và footer trang sao cho không phần tử nào trong các vùng đó sử dụng giá trị màu ngoài tập token đã định nghĩa
+5. Brand_System PHẢI bao gồm favicon được khai báo qua phần tử `<link rel="icon">` ở định dạng SVG, được tạo từ logo chính và có mặt trong HTML head của mọi trang UI
 
-### Requirement 2: Giao Diện Trang Challenge Chuyên Nghiệp
+### Yêu Cầu 2: Giao Diện Frontend Hiện Đại với Dark Mode
 
-**User Story:** Là chủ sở hữu trang web, tôi muốn các trang challenge trông chuyên nghiệp và đáng tin cậy, để khách truy cập hợp lệ không bị lo lắng bởi quy trình xác minh.
+**Câu Chuyện Người Dùng:** Là quản trị viên, tôi muốn giao diện UI dark-mode hiện đại với hiệu ứng glassmorphism và neon glow, để giao diện admin cảm thấy đương đại và giảm mỏi mắt khi sử dụng lâu.
 
-#### Acceptance Criteria
+#### Tiêu Chí Chấp Nhận
 
-1. THE Challenge_Page SHALL sử dụng thiết kế tông tối với nhận diện thương hiệu Kiro bao gồm logo, gradient accent, và typography nhất quán
-2. THE Challenge_Page SHALL hiển thị chỉ báo tiến trình cho trạng thái xác minh với hiệu ứng CSS mượt mà
-3. THE Challenge_Page SHALL responsive và hiển thị chính xác trên viewport từ 320px đến 2560px
-4. THE Challenge_Page SHALL tải mà không có yêu cầu mạng bên ngoài cho font, stylesheet, hoặc script ngoài endpoint xác minh
-5. WHEN quá trình xác minh đang diễn ra, THE Challenge_Page SHALL hiển thị văn bản trạng thái bằng tiếng Việt với chỉ dẫn rõ ràng về những gì đang xảy ra
+1. Admin_UI PHẢI hiển thị tất cả trang sử dụng nền tối với giá trị luminance bằng hoặc thấp hơn #1a1a2e cho body và phần tử surface, và text sáng với giá trị màu bằng hoặc cao hơn độ sáng #e0e0e0 cho body text
+2. Admin_UI PHẢI áp dụng hiệu ứng glassmorphism cho các thành phần card và panel sử dụng backdrop-filter blur từ 8px đến 16px và background opacity từ 0.6 đến 0.9
+3. Admin_UI PHẢI áp dụng hiệu ứng neon glow teal cho các nút hành động chính và mục navigation đang active sử dụng box-shadow với giá trị rgba teal, blur radius tối thiểu 4px, và spread tối thiểu 1px
+4. Admin_UI PHẢI duy trì tỷ lệ tương phản WCAG 2.1 AA (tối thiểu 4.5:1 cho text thường, tối thiểu 3:1 cho text 18px trở lên) cho tất cả nội dung text so với nền trực tiếp của nó
+5. KHI viewport width dưới 768 pixel, Admin_UI PHẢI chuyển nội dung sang layout một cột mà không cần cuộn ngang ở viewport width đó
+6. Admin_UI PHẢI tải tất cả style từ một file CSS hợp nhất duy nhất, không phụ thuộc CDN bên ngoài, với tổng kích thước file không vượt quá 100KB chưa nén
+7. NẾU trình duyệt không hỗ trợ thuộc tính CSS backdrop-filter, THÌ Admin_UI PHẢI fallback sang nền bán trong suốt đặc (opacity từ 0.85 đến 0.95) trên các thành phần card và panel để nội dung vẫn đọc được
 
-### Requirement 3: Kiểm Soát Truy Cập Bảng Quản Trị
+### Yêu Cầu 3: Biểu Đồ Động và Trực Quan Hóa Dữ Liệu
 
-**User Story:** Là quản trị viên hệ thống, tôi muốn bảng quản trị chỉ truy cập được qua đường dẫn `/admin` với bảo vệ mật khẩu và ẩn khỏi trang chủ công khai, để kẻ tấn công không thể phát hiện hoặc brute-force giao diện quản lý.
+**Câu Chuyện Người Dùng:** Là quản trị viên, tôi muốn biểu đồ tương tác hiển thị thống kê license, lịch sử cập nhật, xu hướng heartbeat, và log sự kiện DDoS, để tôi có thể giám sát sức khỏe hệ thống trong nháy mắt.
 
-#### Acceptance Criteria
+#### Tiêu Chí Chấp Nhận
 
-1. THE Homepage SHALL KHÔNG chứa bất kỳ liên kết, tham chiếu, hoặc metadata nào trỏ đến đường dẫn Admin_Panel
-2. WHEN yêu cầu đến `/admin/` từ IP không nằm trong danh sách cho phép admin, THE Master_Server SHALL trả về HTTP 404 Not Found
-3. WHEN yêu cầu đến `/admin/` từ IP được phép nhưng không có phiên hợp lệ, THE Master_Server SHALL hiển thị form đăng nhập yêu cầu admin key
-4. WHEN admin key sai được gửi hơn 5 lần từ cùng một IP trong vòng 10 phút, THE Master_Server SHALL tạm thời chặn IP đó khỏi endpoint đăng nhập trong 30 phút
-5. WHEN phiên admin hợp lệ được thiết lập, THE Admin_Panel SHALL đặt cookie HttpOnly, SameSite=Strict với TTL có thể cấu hình mặc định 12 giờ
+1. KHI dashboard admin tải, Chart_Engine PHẢI hiển thị biểu đồ phân bố trạng thái license hiển thị số lượng license active, suspended, revoked, và expired dưới dạng các phân đoạn có nhãn riêng biệt
+2. KHI dashboard admin tải, Chart_Engine PHẢI hiển thị biểu đồ timeline heartbeat cho thấy số heartbeat nhận được mỗi khoảng 1 giờ trong 24 giờ qua
+3. KHI trang releases admin tải, Chart_Engine PHẢI hiển thị biểu đồ lịch sử cập nhật vẽ phiên bản release trên trục Y so với ngày tạo trên trục X
+4. Chart_Engine PHẢI sử dụng thư viện biểu đồ JavaScript nhẹ (dưới 50KB gzipped) được bundle cục bộ mà không có yêu cầu CDN bên ngoài
+5. KHI có dữ liệu mới qua refresh trang, Chart_Engine PHẢI cập nhật trực quan hóa biểu đồ để phản ánh dữ liệu hiện tại
+6. Chart_Engine PHẢI hiển thị biểu đồ ở định dạng SVG hoặc Canvas co giãn tỷ lệ ở viewport width từ 320 pixel đến 2560 pixel với nhãn trục và giá trị dữ liệu hiển thị ở cỡ chữ không nhỏ hơn 10 pixel
+7. KHI người dùng hover hoặc tap vào điểm dữ liệu biểu đồ, Chart_Engine PHẢI hiển thị tooltip cho thấy giá trị chính xác và nhãn cho điểm dữ liệu đó
+8. NẾU không có dữ liệu cho biểu đồ, THÌ Chart_Engine PHẢI hiển thị thông báo placeholder cho biết không có dữ liệu thay vì hiển thị biểu đồ trống hoặc bị lỗi
 
-### Requirement 4: Giao Diện Bảng Điều Khiển Admin Chuyên Nghiệp
+### Yêu Cầu 4: Script Cài Đặt Client Thông Minh
 
-**User Story:** Là quản trị viên hệ thống, tôi muốn bảng điều khiển admin chuyên nghiệp, trực quan, và đầy đủ tính năng, để tôi có thể quản lý license, giám sát node, và phát hành bản cập nhật hiệu quả.
+**Câu Chuyện Người Dùng:** Là người vận hành máy chủ, tôi muốn script cài đặt tự động phát hiện OS, cài đặt dependency cần thiết, và triển khai binary Kiro WAF client, để tôi có thể thiết lập bảo vệ mà không cần quản lý dependency thủ công.
 
-#### Acceptance Criteria
+#### Tiêu Chí Chấp Nhận
 
-1. THE Admin_Panel SHALL hiển thị phần tổng quan gồm tổng số license, node đang hoạt động, heartbeat gần đây, và tình trạng hệ thống ở một cái nhìn tổng quát
-2. THE Admin_Panel SHALL cung cấp giao diện quản lý license hỗ trợ các thao tác tạo, xem, sửa, gia hạn, xoay key, thu hồi, kích hoạt, và xóa
-3. THE Admin_Panel SHALL cung cấp giao diện quản lý phát hành để đăng và xóa artifact cập nhật với các trường component, channel, version, artifact URL, và SHA256
-4. THE Admin_Panel SHALL hiển thị bản ghi heartbeat và báo cáo gần đây trong bảng có thể sắp xếp với các cột timestamp, node ID, IP, và trạng thái
-5. THE Admin_Panel SHALL sử dụng thiết kế tông tối nhất quán với phân cấp trực quan rõ ràng, khoảng cách hợp lý, và typography dễ đọc ở mọi kích thước viewport
-6. WHEN thao tác admin thành công hoặc thất bại, THE Admin_Panel SHALL hiển thị thông báo flash với nội dung kết quả
+1. KHI Install_Script thực thi, Install_Script PHẢI phát hiện bản phân phối hệ điều hành (Ubuntu, Debian, CentOS, Rocky, Fedora, Arch) và phiên bản
+2. KHI OS được phát hiện không được hỗ trợ, Install_Script PHẢI thoát với mã thoát khác không và thông báo lỗi mô tả liệt kê các bản phân phối được hỗ trợ
+3. NẾU Install_Script không được thực thi với quyền root, THÌ Install_Script PHẢI thoát với mã thoát khác không và hiển thị thông báo cho biết cần root hoặc sudo
+4. KHI các dependency bắt buộc (curl, sha256sum, systemctl) bị thiếu, Install_Script PHẢI cài đặt chúng sử dụng trình quản lý gói của OS đã phát hiện
+5. KHI chế độ XDP được yêu cầu, Install_Script PHẢI cài đặt dependency build XDP (clang, llvm, libbpf-dev) sử dụng trình quản lý gói của OS đã phát hiện
+6. KHI tất cả dependency được thỏa mãn, Install_Script PHẢI tải binary client từ firewall.vpsgen.com sử dụng license key được cung cấp để xác thực, với timeout kết nối 30 giây, và xác minh checksum SHA-256 so với giá trị lấy từ endpoint thông tin release của server
+7. NẾU xác minh checksum SHA-256 thất bại, THÌ Install_Script PHẢI hủy cài đặt, xóa file đã tải, và hiển thị giá trị checksum mong đợi so với thực tế
+8. NẾU tải từ firewall.vpsgen.com thất bại do lỗi mạng hoặc license key không hợp lệ, THÌ Install_Script PHẢI thoát với mã thoát khác không và hiển thị thông báo cho biết lý do thất bại
+9. Install_Script PHẢI là idempotent: khi thực thi nhiều lần trên cùng hệ thống, nó PHẢI thay thế binary hiện có chỉ khi phiên bản khác nhau, giữ nguyên file cấu hình hiện có, và để systemd service ở trạng thái enabled và running
+10. KHI cài đặt hoàn tất, Install_Script PHẢI tạo và enable systemd service unit cho Client_Node, reload systemd daemon, và khởi động service
+11. KHI Install_Script được thực thi trên hệ thống mà Client_Node service đang chạy, Install_Script PHẢI dừng service hiện có trước khi thay thế binary và khởi động lại sau khi cài đặt hoàn tất
 
-### Requirement 5: Cơ Chế Cập Nhật Qua CLI
+### Yêu Cầu 5: Hệ Thống Cập Nhật OTA Tự Động
 
-**User Story:** Là người vận hành máy chủ, tôi muốn nhận thông báo cập nhật trong CLI và thực hiện cập nhật qua CLI với tải xuống binary tự động và xác minh, để tôi có thể giữ các node luôn cập nhật mà không cần chuyển file thủ công.
+**Câu Chuyện Người Dùng:** Là người vận hành hệ thống, tôi muốn các client node tự động kiểm tra và áp dụng cập nhật từ master server, để các bản vá bảo mật được triển khai mà không cần can thiệp thủ công.
 
-#### Acceptance Criteria
+#### Tiêu Chí Chấp Nhận
 
-1. WHEN có bản phát hành mới, THE Client_WAF SHALL ghi thông báo ra stdout bao gồm tên component, phiên bản hiện tại, phiên bản mới, và artifact URL
-2. WHEN người vận hành chạy lệnh cập nhật qua CLI_Tool, THE Update_System SHALL tải artifact từ URL được chỉ định trong metadata phát hành
-3. WHEN artifact được tải xuống, THE Update_System SHALL xác minh checksum SHA-256 khớp với giá trị được công bố trong metadata phát hành trước khi tiếp tục
-4. IF xác minh SHA-256 thất bại, THEN THE Update_System SHALL hủy cập nhật, ghi log lỗi, và giữ nguyên binary hiện tại
-5. WHEN checksum được xác minh, THE Update_System SHALL thay thế binary hiện tại một cách nguyên tử, khởi động lại dịch vụ, và xác minh health trong vòng 30 giây
-6. IF kiểm tra health thất bại sau khi thay thế binary, THEN THE Update_System SHALL rollback về binary trước đó và khởi động lại dịch vụ
+1. OTA_Updater PHẢI kiểm tra cập nhật có sẵn bằng cách polling Master_Server ở khoảng thời gian có thể cấu hình (mặc định 300 giây, tối thiểu 60 giây, tối đa 86400 giây)
+2. KHI Master_Server gửi thông báo push qua phản hồi heartbeat, OTA_Updater PHẢI khởi tạo kiểm tra cập nhật ngay lập tức
+3. KHI có cập nhật, OTA_Updater PHẢI tải binary mới trực tiếp từ firewall.vpsgen.com trong timeout 5 phút và xác minh checksum SHA-256
+4. NẾU checksum binary đã tải không khớp giá trị mong đợi, THÌ OTA_Updater PHẢI hủy bản tải và ghi log lỗi mà không sửa đổi binary đang chạy
+5. NẾU tải thất bại do lỗi mạng hoặc timeout, THÌ OTA_Updater PHẢI hủy mọi bản tải một phần, ghi log thất bại, và thử lại ở khoảng polling tiếp theo mà không sửa đổi binary đang chạy
+6. KHI checksum hợp lệ, OTA_Updater PHẢI thực hiện thay thế binary nguyên tử sử dụng rename(2) để hoán đổi binary mới vào vị trí
+7. KHI binary mới không đạt trạng thái systemd active trong 30 giây sau khi restart service, OTA_Updater PHẢI tự động rollback về phiên bản binary trước đó và restart service với binary đã khôi phục
+8. OTA_Updater PHẢI giữ lại chính xác một phiên bản binary trước đó cho mục đích rollback
+9. OTA_Updater PHẢI ghi log tất cả thao tác cập nhật (kiểm tra, tải, xác minh, thay thế, rollback) vào system journal
+10. NẾU Master_Server không thể truy cập trong lần poll theo lịch, THÌ OTA_Updater PHẢI ghi log lỗi kết nối và thử lại ở khoảng polling tiếp theo mà không thay đổi binary đang chạy
 
-### Requirement 6: Phát Hiện và Chặn XDP/Ban/Block Thông Minh
+### Yêu Cầu 6: Tối Ưu Hiệu Năng XDP/eBPF
 
-**User Story:** Là quản trị viên hệ thống, tôi muốn bộ lọc XDP và ban engine phát hiện và chặn mối đe dọa một cách thông minh bao gồm các nỗ lực bypass, botnet, flood, và tấn công tài nguyên, để máy chủ vẫn khả dụng khi bị tấn công.
+**Câu Chuyện Người Dùng:** Là kỹ sư mạng, tôi muốn bộ lọc gói tin XDP xử lý 10 triệu gói tin mỗi giây với độ trễ dưới 100 nano giây mỗi gói, để giảm thiểu DDoS không trở thành nút thắt cổ chai.
 
-#### Acceptance Criteria
+#### Tiêu Chí Chấp Nhận
 
-1. THE XDP_Filter SHALL drop gói tin khớp với LPM trie blocklist IPv4 ở tốc độ line rate mà không tiêu tốn CPU ứng dụng
-2. WHEN IP nguồn vượt ngưỡng packets-per-second được cấu hình cho mỗi IP, THE XDP_Filter SHALL drop các gói tin tiếp theo từ IP đó trong phần còn lại của cửa sổ rate
-3. WHEN subnet /24 vượt ngưỡng packets-per-second được cấu hình cho subnet, THE XDP_Filter SHALL drop các gói tin tiếp theo từ tất cả IP trong subnet đó trong phần còn lại của cửa sổ rate
-4. THE XDP_Filter SHALL phát hiện và drop gói tin bị lỗi bao gồm null TCP flags, SYN+FIN, SYN+RST, Christmas tree flags, IP total length không hợp lệ, và UDP length không khớp
-5. WHEN bộ giới hạn tốc độ L7 của Client_WAF phát hiện IP vượt ngưỡng hard-block, THE Ban_Engine SHALL thêm IP vào cả L7 ban store và file blocklist XDP để thực thi ở mức kernel
-6. THE Detection_Engine SHALL nhận diện công cụ tự động bằng khớp mẫu User-Agent và chặn ngay lập tức các yêu cầu từ công cụ tấn công đã biết bao gồm sqlmap, python-requests không có custom UA, libwww-perl, và chuỗi User-Agent rỗng
-7. WHEN IP nguồn bị ban ở L7, THE Client_WAF SHALL đồng bộ ban đến blocklist XDP trong vòng 1 giây để các gói tin tiếp theo bị drop ở mức kernel
+1. XDP_Filter PHẢI sử dụng BPF_MAP_TYPE_PERCPU_ARRAY cho bộ đếm thống kê để loại bỏ tranh chấp lock giữa các CPU
+2. XDP_Filter PHẢI sử dụng BPF_MAP_TYPE_LRU_HASH với dung lượng tối đa 262,144 entry cho trạng thái rate per-IP và per-subnet để tránh logic eviction thủ công
+3. XDP_Filter PHẢI xử lý một gói tin 64-byte kích thước tối thiểu trong dưới 100 nano giây trung bình trên CPU x86_64 chạy ở 3.0 GHz trở lên (đo qua delta bpf_ktime_get_ns trên 1,000,000 gói tin)
+4. XDP_Filter PHẢI duy trì throughput 10 triệu gói tin 64-byte mỗi giây trên một CPU core đơn ở 3.0 GHz trở lên khi gắn ở chế độ XDP native
+5. XDP_Filter PHẢI tránh cấp phát bộ nhớ động trong đường dẫn chương trình XDP
+6. XDP_Filter PHẢI biên dịch với clang -O2 optimization và tạo ra BPF object hợp lệ dưới 32,768 byte kích thước
+7. KHI blocklist map (dung lượng tối đa 65,536 entry) đạt dung lượng tối đa, XDP_Filter PHẢI tiếp tục xử lý gói tin sử dụng các entry hiện có mà không crash hoặc trả về XDP_ABORTED
+8. KHI LRU rate state map đạt dung lượng tối đa, XDP_Filter PHẢI evict entry ít được sử dụng gần đây nhất và tiếp tục rate limiting cho IP nguồn mới mà không trả về XDP_ABORTED
+9. KHI nhận gói tin không phải IPv4, XDP_Filter PHẢI trả về XDP_PASS mà không thực hiện bất kỳ kiểm tra lọc hoặc rate limiting nào
 
-### Requirement 7: Bảo Vệ Chống Bypass
+### Yêu Cầu 7: Tối Ưu Hiệu Năng Golang WAF
 
-**User Story:** Là quản trị viên hệ thống, tôi muốn WAF chống lại các kỹ thuật bypass phổ biến, để kẻ tấn công không thể vượt qua các lớp bảo vệ.
+**Câu Chuyện Người Dùng:** Là kỹ sư nền tảng, tôi muốn WAF reverse proxy xử lý 100,000 request mỗi giây với mức sử dụng bộ nhớ tối thiểu và GC pause thấp, để lưu lượng hợp lệ không bị suy giảm trong các cuộc tấn công.
 
-#### Acceptance Criteria
+#### Tiêu Chí Chấp Nhận
 
-1. THE Client_WAF SHALL xác thực rằng HMAC của cookie truy cập khớp với IP yêu cầu, ngăn chặn cookie replay từ địa chỉ nguồn khác
-2. WHEN chế độ Cloudflare được bật, THE cấu hình Nginx của Master_Server SHALL từ chối kết nối HTTP/HTTPS từ IP không nằm trong dải IP Cloudflare, ngăn chặn bypass origin IP
-3. THE XDP_Filter SHALL drop gói tin có IP nguồn giả mạo private (RFC 1918, loopback, link-local) đến trên giao diện public
-4. THE Client_WAF SHALL triển khai giới hạn tốc độ per-IP và per-subnet độc lập để các cuộc tấn công phân tán từ một /24 bị throttle ngay cả khi các IP riêng lẻ nằm dưới ngưỡng per-IP
-5. WHEN cookie challenge hết hạn, THE Client_WAF SHALL yêu cầu khách truy cập hoàn thành challenge mới thay vì cho phép truy cập thẳng đến backend
+1. WAF_Proxy PHẢI xử lý 100,000 HTTP request mỗi giây trên server 4-core với độ trễ phản hồi dưới 5 mili giây ở p99, đo sử dụng request body 1KB qua kết nối HTTP/1.1 persistent với backend phản hồi trong 1 mili giây
+2. WAF_Proxy PHẢI tiêu thụ dưới 512 megabyte bộ nhớ RSS dưới tải 100,000 request mỗi giây duy trì ít nhất 60 giây
+3. WAF_Proxy PHẢI duy trì thời gian pause garbage collection Go dưới 1 mili giây (đo qua runtime/metrics) dưới tải 100,000 request mỗi giây
+4. WAF_Proxy PHẢI sử dụng pattern zero-allocation trong đường dẫn request nóng (không cấp phát heap mỗi request cho kiểm tra header và routing, xác minh qua Go benchmark báo cáo 0 allocs/op)
+5. WAF_Proxy PHẢI sử dụng connection pooling cho kết nối backend với số kết nối idle tối đa có thể cấu hình (mặc định 256) và tổng số kết nối tối đa có thể cấu hình (mặc định 1024)
+6. WAF_Proxy PHẢI sử dụng sync.Pool cho buffer tái sử dụng trong đường dẫn chuyển tiếp proxy
+7. KHI backend không thể truy cập, WAF_Proxy PHẢI trả về phản hồi 502 trong 5 giây mà không rò rỉ goroutine hoặc kết nối
+8. NẾU tất cả kết nối backend trong pool đang được sử dụng và giới hạn tổng kết nối tối đa đã đạt, THÌ WAF_Proxy PHẢI xếp hàng request tối đa 1 giây và trả về phản hồi 503 nếu không có kết nối nào khả dụng trong khoảng thời gian đó
+9. KHI WAF_Proxy khởi động, WAF_Proxy PHẢI thiết lập GOGC và GOMEMLIMIT dựa trên environment để duy trì mục tiêu GC pause dưới tải
 
-### Requirement 8: Trang Chủ và Giao Diện Công Khai
+### Yêu Cầu 8: Tái Cấu Trúc Thư Mục theo Standard Go Layout
 
-**User Story:** Là khách truy cập domain quản lý WAF, tôi muốn thấy trang chủ sản phẩm chuyên nghiệp không lộ chi tiết hệ thống nội bộ, để hệ thống trông đáng tin cậy và an toàn.
+**Câu Chuyện Người Dùng:** Là developer, tôi muốn dự án được tổ chức theo standard Go project layout, để codebase dễ điều hướng và tuân theo quy ước cộng đồng.
 
-#### Acceptance Criteria
+#### Tiêu Chí Chấp Nhận
 
-1. THE Homepage SHALL hiển thị thương hiệu sản phẩm, mô tả ngắn gọn về dịch vụ bảo vệ, và thông tin liên hệ mà không tiết lộ đường dẫn admin hoặc API endpoint
-2. THE Homepage SHALL sử dụng thiết kế tông tối hiện đại nhất quán với nhận diện trực quan của Challenge_Page và Admin_Panel
-3. THE Homepage SHALL tải trong dưới 2 giây trên kết nối 3G mà không có phụ thuộc bên ngoài
-4. THE Homepage SHALL KHÔNG bao gồm bất kỳ JavaScript nào có thể bị khai thác để lộ thông tin về hệ thống backend
+1. Mã nguồn Master_Server PHẢI nằm dưới cmd/kiro-master/ cho entry point (main.go) và internal/master/ cho các package private
+2. Mã nguồn Client_Node PHẢI nằm dưới cmd/kiro-client/ cho entry point (main.go) và internal/client/ cho các package private
+3. Mã nguồn C và build script của XDP_Filter PHẢI nằm dưới internal/client/xdp/
+4. Các package dùng chung bởi cả Master_Server và Client_Node PHẢI nằm dưới pkg/ với API exported tuân theo quy ước Go module versioning và không import từ internal/
+5. Web asset (CSS, JavaScript, HTML template) PHẢI nằm dưới web/templates/ và web/static/
+6. Cấu hình triển khai (systemd, nginx, nftables, sysctl) PHẢI nằm dưới deployments/
+7. Dự án PHẢI duy trì cấu hình go.work hoặc go.mod cho phép build cmd/kiro-master/, cmd/kiro-client/, và cmd/kiro-cli/ từ thư mục gốc repository sử dụng lệnh go build tiêu chuẩn
+8. KHI tái cấu trúc hoàn tất, dự án PHẢI build tất cả Go binary (kiro-master, kiro-client, kiro-cli) thành công sử dụng một lệnh make build duy nhất, tạo ra file thực thi trong thư mục build output với mã thoát bằng không và không có lỗi biên dịch
+9. NẾU mã nguồn C XDP_Filter cần biên dịch, THÌ dự án PHẢI cung cấp make target riêng (make build-xdp) biên dịch mã nguồn XDP C, để build Go binary không phụ thuộc vào toolchain clang/llvm
+10. KHI file mã nguồn được di chuyển sang cấu trúc thư mục mới, dự án PHẢI cập nhật tất cả import path nội bộ để không còn tham chiếu import bị hỏng
 
-### Requirement 9: Ổn Định Hệ Thống và Xử Lý Lỗi
+### Yêu Cầu 9: README và Tài Liệu Dự Án
 
-**User Story:** Là quản trị viên hệ thống, tôi muốn hệ thống WAF xử lý lỗi một cách graceful và duy trì khả dụng dịch vụ, để bảo vệ không bị gián đoạn bởi các lỗi tạm thời.
+**Câu Chuyện Người Dùng:** Là contributor, tôi muốn README toàn diện và tài liệu kiến trúc với badge và diagram, để tôi có thể hiểu hệ thống nhanh chóng.
 
-#### Acceptance Criteria
+#### Tiêu Chí Chấp Nhận
 
-1. IF máy chủ backend không khả dụng, THEN THE Client_WAF SHALL trả về HTTP 502 Bad Gateway với trang lỗi có thương hiệu thay vì lộ thông tin nội bộ proxy
-2. IF heartbeat license thất bại 3 lần liên tiếp, THEN THE Client_WAF SHALL vào chế độ khóa chặn tất cả lưu lượng ngoại trừ từ IP admin
-3. WHEN Client_WAF vào chế độ khóa, THE Client_WAF SHALL ghi log lý do khóa và timestamp cho mục đích chẩn đoán
-4. IF file blocklist XDP không thể ghi được, THEN THE Client_WAF SHALL ghi log lỗi và tiếp tục hoạt động chỉ với thực thi L7 mà không crash
-5. THE Master_Server SHALL xử lý các yêu cầu API đồng thời mà không hỏng dữ liệu sử dụng chế độ SQLite WAL và cấu hình busy timeout phù hợp
+1. README PHẢI hiển thị badge CI status (GitHub Actions workflow badge), Go version, và license là các phần tử nội dung đầu tiên của tài liệu
+2. README PHẢI bao gồm Mermaid architecture diagram cho thấy mối quan hệ giữa Master_Server, Client_Node, XDP_Filter, Cloudflare, và SQLite
+3. README PHẢI bao gồm Mermaid sequence diagram cho thấy luồng heartbeat polling và luồng OTA update (kiểm tra, tải, xác minh, thay thế, rollback)
+4. README PHẢI chứa các phần theo thứ tự: overview, architecture, quick start, configuration, deployment, và contributing, trong đó phần quick start cho phép người đọc build tất cả binary và chạy test từ bản clone sạch trong 10 phút
+5. Documentation_Site PHẢI bao gồm tài liệu kiến trúc (docs/architecture.md) mô tả mỗi trong bốn thành phần cốt lõi (Master_Server, Client_Node, XDP_Filter, CLI_Tool) với tóm tắt trách nhiệm và giải thích luồng dữ liệu bao gồm đường đi request từ ingress đến backend
+6. Documentation_Site PHẢI bao gồm hướng dẫn thiết lập phát triển (docs/development.md) liệt kê tất cả prerequisite build (Go version, clang, llvm, libbpf-dev, make), các bước biên dịch tất cả binary, và lệnh chạy toàn bộ test suite
+7. KHI Mermaid diagram được bao gồm trong README hoặc docs/architecture.md, diagram PHẢI sử dụng cú pháp Mermaid hợp lệ hiển thị không lỗi trong GitHub Markdown renderer
 
-### Requirement 10: Triển Khai Production và Cấu Trúc Dự Án
+### Yêu Cầu 10: Tài Liệu Công Khai Người Dùng Cuối
 
-**User Story:** Là kỹ sư DevOps, tôi muốn cấu trúc dự án sạch sẽ, tổ chức tốt, và tối ưu cho triển khai production, để build có thể tái tạo và triển khai đáng tin cậy.
+**Câu Chuyện Người Dùng:** Là người dùng cuối, tôi muốn tài liệu công khai tại /docs giải thích cách sử dụng Kiro WAF mà không lộ chi tiết triển khai nội bộ, để tôi có thể cấu hình và vận hành hệ thống độc lập.
 
-#### Acceptance Criteria
+#### Tiêu Chí Chấp Nhận
 
-1. THE Master_Server SHALL có thể triển khai dưới dạng binary đơn với quản lý dịch vụ systemd, tự động khởi động lại khi lỗi, và endpoint kiểm tra health
-2. THE Client_WAF SHALL có thể triển khai dưới dạng binary đơn với quản lý dịch vụ systemd và cấu hình qua biến môi trường và cờ dòng lệnh
-3. THE script triển khai SHALL cài đặt tất cả thành phần, cấu hình Nginx reverse proxy, build XDP object, và xác minh health trong một lần chạy tự động trên Ubuntu 22.04
-4. THE mã nguồn XDP_Filter SHALL biên dịch không có warning sử dụng clang với `-Wall -Werror` nhắm kiến trúc BPF
-5. WHEN script triển khai hoàn tất, THE hệ thống SHALL có Master_Server, Client_WAF, Nginx, và XDP đều hoạt động và vượt qua kiểm tra health
+1. Documentation_Site PHẢI được phục vụ tại đường dẫn URL /docs trên Master_Server dưới dạng trang HTML tĩnh với sidebar điều hướng cố định hoặc mục lục liệt kê tất cả phần
+2. Documentation_Site PHẢI chứa tối thiểu: hướng dẫn cài đặt, tham chiếu cấu hình bao gồm tất cả tùy chọn YAML người dùng trong kiro.example.yaml, phần xử lý sự cố với ít nhất 10 kịch bản lỗi phổ biến và cách giải quyết, và phần FAQ
+3. Documentation_Site KHÔNG ĐƯỢC lộ endpoint API nội bộ, schema database, đường dẫn mã nguồn, hoặc chi tiết triển khai bảo mật
+4. Documentation_Site PHẢI bao gồm hướng dẫn quick-start cho phép người dùng có kinh nghiệm dòng lệnh Linux cơ bản cài đặt và cấu hình Client_Node trên OS được hỗ trợ trong 15 phút, đo từ tải script đến systemd service đã xác minh đang chạy
+5. KHI tài liệu tham chiếu tùy chọn cấu hình, Documentation_Site PHẢI cung cấp giá trị ví dụ hợp lệ, kiểu dữ liệu của tùy chọn, giá trị mặc định, phạm vi chấp nhận hoặc giá trị cho phép, và mô tả một câu về tác dụng của tùy chọn cho mọi tùy chọn cấu hình người dùng
+6. Documentation_Site PHẢI có sẵn bằng cả tiếng Việt và tiếng Anh với nút chuyển ngôn ngữ hiển thị trên mọi trang
+7. NẾU người dùng yêu cầu đường dẫn /docs và nội dung tài liệu không khả dụng, THÌ Master_Server PHẢI trả về trang lỗi cho biết tài liệu tạm thời không khả dụng thay vì lỗi server chung
+8. KHI bản phát hành Client_Node mới được xuất bản, Documentation_Site PHẢI hiển thị phiên bản tài liệu hoặc ngày cập nhật cuối trên mỗi trang để người dùng có thể xác minh độ mới của nội dung
+
+### Yêu Cầu 11: Xử Lý Lỗi và Ngăn Rò Rỉ Bộ Nhớ
+
+**Câu Chuyện Người Dùng:** Là kỹ sư độ tin cậy, tôi muốn xử lý lỗi mạnh mẽ và ngăn rò rỉ bộ nhớ trên tất cả thành phần, để hệ thống chạy ổn định hàng tháng mà không suy giảm.
+
+#### Tiêu Chí Chấp Nhận
+
+1. KHI nhận HTTP response body, WAF_Proxy PHẢI đóng response body trong cùng phạm vi hàm sử dụng defer
+2. WAF_Proxy PHẢI áp dụng read timeout 30 giây và write timeout 60 giây trên tất cả kết nối HTTP client
+3. WAF_Proxy PHẢI giới hạn goroutine đồng thời ở mức tối đa có thể cấu hình (mặc định 10,000) sử dụng pattern semaphore
+4. KHI goroutine panic, WAF_Proxy PHẢI recover panic, ghi log stack trace, và tiếp tục phục vụ các request khác
+5. Master_Server PHẢI áp dụng read timeout 30 giây và write timeout 60 giây trên tất cả kết nối HTTP server
+6. KHI database query vượt quá 5 giây, Master_Server PHẢI hủy query context và trả về phản hồi HTTP 503 với body JSON chứa trường error cho biết query đã timeout
+7. Client_Node PHẢI chạy cleanup các rate-limit entry hết hạn mỗi 120 giây và challenge token hết hạn mỗi 60 giây để ngăn tăng trưởng bộ nhớ không giới hạn
+8. NẾU giá trị cấu hình bắt buộc (license key, cookie secret, backend URL, hoặc master URL) bị thiếu hoặc rỗng khi khởi động, THÌ Client_Node PHẢI ghi log thông báo lỗi xác định giá trị bị thiếu và thoát với mã trạng thái khác không
+9. NẾU giới hạn goroutine đồng thời của WAF_Proxy đã đạt, THÌ WAF_Proxy PHẢI từ chối request đến với phản hồi HTTP 503 cho đến khi có slot goroutine khả dụng
+
+
+### Yêu Cầu 12: CLI Commands Hoạt Động Đầy Đủ và Tài Liệu Website
+
+**Câu Chuyện Người Dùng:** Là quản trị viên hệ thống, tôi muốn tất cả lệnh CLI hoạt động 100% với test đầy đủ và website hiển thị hướng dẫn chi tiết cho từng lệnh, để tôi có thể quản lý hệ thống hiệu quả và tra cứu cách sử dụng nhanh chóng.
+
+#### Tiêu Chí Chấp Nhận
+
+1. CLI_Tool PHẢI cung cấp lệnh `version` trả về chuỗi phiên bản build hợp lệ theo định dạng semver (X.Y.Z) với mã thoát bằng không
+2. CLI_Tool PHẢI cung cấp lệnh `license fingerprint` tạo machine fingerprint hash duy nhất cho mỗi máy chủ, chấp nhận tham số tùy chọn --salt và trả về chuỗi hash hex hợp lệ (64 ký tự hex lowercase)
+3. CLI_Tool PHẢI cung cấp lệnh `status` chấp nhận tham số --config và trả về JSON chứa trạng thái runtime hiện tại bao gồm các trường: mode (server hoặc full), uptime, license status, và phiên bản hiện tại
+4. CLI_Tool PHẢI cung cấp lệnh `health` chấp nhận tham số --config, --os-release, --preflight-writable-root, --skip-command-checks và trả về JSON chứa kết quả kiểm tra sức khỏe tổng hợp bao gồm trạng thái service (active/inactive), kết quả preflight, và overall status (healthy, degraded, hoặc unhealthy)
+5. CLI_Tool PHẢI cung cấp lệnh `preflight` chấp nhận tham số --config, --os-release, --preflight-writable-root, --skip-command-checks và trả về JSON chứa kết quả kiểm tra điều kiện tiên quyết bao gồm OS compatibility (Ubuntu 22.04/24.04), quyền root (UID 0), và command availability (nft, nginx, systemctl)
+6. CLI_Tool PHẢI cung cấp lệnh `mode show` hiển thị chế độ hoạt động hiện tại và lệnh `mode set --mode <value>` thay đổi chế độ hoạt động, NẾU giá trị --mode không phải "server" hoặc "full", THÌ CLI_Tool PHẢI hiển thị thông báo lỗi cho biết giá trị không hợp lệ và thoát với mã thoát 1
+7. CLI_Tool PHẢI cung cấp lệnh `install plan` trả về JSON mô tả kế hoạch cài đặt, lệnh `install stage-lab` thực hiện staging vào thư mục --install-root, và lệnh `install apply-lab` áp dụng cài đặt yêu cầu tham số --ack với giá trị chính xác "KIRO_LAB_INSTALL_APPLY" để xác nhận thực thi
+8. CLI_Tool PHẢI cung cấp lệnh `update check` kiểm tra bản cập nhật từ Master_Server (yêu cầu --master-url), lệnh `update apply` tải và áp dụng bản cập nhật với xác minh SHA-256 (yêu cầu --master-url, --binary-path, --service), và lệnh `update rollback` khôi phục phiên bản trước từ file .bak (yêu cầu --binary-path, --service)
+9. CLI_Tool PHẢI cung cấp lệnh `incident report` tạo báo cáo sự cố với các tham số --type (attack, lost_ssh, update_failed, origin_ip_leaked, license_rebind, runtime_security, other), --severity, --status, --summary và lưu kết quả dưới dạng JSON và Markdown vào thư mục --output-dir
+10. CLI_Tool PHẢI cung cấp lệnh `pilot report` tạo báo cáo pilot với các tham số --server-count, --started-at (RFC3339), --ended-at (RFC3339) và tổng hợp evidence từ --health-file, --benchmark-file, --incident-dir, trả về kết quả go/no-go dưới dạng JSON và Markdown
+11. CLI_Tool PHẢI cung cấp lệnh `report` chấp nhận tham số --config và trả về JSON chứa báo cáo tổng hợp hệ thống bao gồm thông tin phiên bản, cấu hình runtime, và trạng thái các thành phần
+12. KHI CLI_Tool nhận lệnh không hợp lệ hoặc không có tham số, CLI_Tool PHẢI hiển thị thông báo usage liệt kê tất cả lệnh khả dụng và thoát với mã thoát 2
+13. NẾU tham số bắt buộc bị thiếu cho bất kỳ lệnh nào (ví dụ: --master-url cho update check, --binary-path cho update apply, --service cho update apply/rollback), THÌ CLI_Tool PHẢI hiển thị thông báo lỗi chỉ rõ tên tham số bị thiếu và thoát với mã thoát 2
+14. Documentation_Site PHẢI hiển thị trang danh sách tất cả lệnh CLI (tối thiểu 11 lệnh chính) với cú pháp sử dụng, danh sách tham số bắt buộc và tùy chọn kèm giá trị mặc định, và ít nhất 1 ví dụ sử dụng thực tế cho mỗi lệnh
+15. KHI người dùng truy cập trang CLI documentation trên website, Documentation_Site PHẢI hiển thị mục lục có thể điều hướng nhanh đến từng lệnh và hỗ trợ tìm kiếm theo tên lệnh
+16. CLI_Tool PHẢI có unit test và integration test cho mỗi lệnh, đảm bảo coverage tối thiểu 80% cho package cmd/kiro-cli và các sub-package liên quan
+17. NẾU lệnh `update apply` hoàn tất thay thế binary nhưng health check thất bại trong vòng 30 giây, THÌ CLI_Tool PHẢI tự động rollback về phiên bản trước (khôi phục file .bak) và restart service, sau đó thoát với mã thoát 1 kèm thông báo lỗi cho biết đã rollback
+18. NẾU lệnh `install apply-lab` được gọi mà giá trị --ack không khớp "KIRO_LAB_INSTALL_APPLY" hoặc không có quyền root (UID != 0), THÌ CLI_Tool PHẢI từ chối thực thi và thoát với mã thoát 1 kèm thông báo lỗi cụ thể
+
+### Yêu Cầu 13: Kiểm Tra Liên Tục XDP và Binary với Tự Phục Hồi
+
+**Câu Chuyện Người Dùng:** Là kỹ sư vận hành, tôi muốn hệ thống liên tục kiểm tra sức khỏe XDP filter và binary client, tự động phục hồi khi bị DDoS sập hoặc mất mạng, để server được bảo vệ liên tục mà không cần can thiệp thủ công.
+
+#### Tiêu Chí Chấp Nhận
+
+1. Health_Monitor PHẢI kiểm tra trạng thái XDP_Filter mỗi 10 giây bằng cách đọc BPF map statistics và xác minh chương trình XDP vẫn được gắn vào network interface
+2. Health_Monitor PHẢI kiểm tra trạng thái binary Client_Node mỗi 10 giây bằng cách gọi endpoint health check nội bộ (/__kiro/health) và xác minh phản hồi HTTP 200 trong timeout 5 giây
+3. KHI XDP_Filter bị detach khỏi network interface hoặc BPF program không còn hoạt động, Health_Monitor PHẢI tự động reload và reattach chương trình XDP trong vòng 30 giây
+4. KHI binary Client_Node không phản hồi health check trong 3 lần liên tiếp (30 giây), Health_Monitor PHẢI tự động restart service qua systemctl và ghi log sự kiện recovery
+5. NẾU Client_Node crash trong khi traffic đến vượt 5x ngưỡng rate-limit cấu hình hiện tại (đo trong cửa sổ 10 giây trước crash), THÌ Health_Monitor PHẢI kích hoạt chế độ emergency recovery: restart service với cấu hình rate-limit nghiêm ngặt hơn (giảm 50% ngưỡng cho phép) trong 5 phút đầu sau recovery, sau đó tự động khôi phục ngưỡng ban đầu
+6. NẾU Client_Node mất kết nối đến Master_Server quá 60 giây, THÌ Health_Monitor PHẢI chuyển sang chế độ offline operation: tiếp tục bảo vệ với cấu hình cached cuối cùng và thử reconnect mỗi 30 giây với exponential backoff (tối đa 5 phút giữa các lần thử)
+7. KHI kết nối đến Master_Server được khôi phục sau giai đoạn offline, Health_Monitor PHẢI đồng bộ lại cấu hình mới nhất từ Master_Server, gửi báo cáo về thời gian offline (thời điểm bắt đầu, thời điểm kết thúc, số lần thử reconnect), và chuyển từ chế độ offline operation về chế độ online với cấu hình mới đồng bộ
+8. Health_Monitor PHẢI bảo vệ dữ liệu rate-limit và session state bằng cách ghi snapshot ra disk mỗi 60 giây với kích thước tối đa 64MB mỗi file snapshot
+9. NẾU restart service thất bại 3 lần liên tiếp trong vòng 5 phút, THÌ Health_Monitor PHẢI gửi alert đến Master_Server (nếu có kết nối) và ghi log critical error, sau đó chờ 60 giây trước khi thử lại
+10. Package_Plan PHẢI xác định mức độ bảo vệ cho mỗi gói: số lượng rule tối đa, ngưỡng rate-limit, và tính năng XDP khả dụng — Health_Monitor PHẢI enforce giới hạn theo Package_Plan được cấp từ admin và từ chối áp dụng cấu hình vượt quá giới hạn của Package_Plan hiện tại
+11. KHI Health_Monitor phát hiện tấn công DDoS (traffic đến vượt 10x ngưỡng rate-limit cấu hình hiện tại của Package_Plan, đo trung bình trong cửa sổ trượt 10 giây), Health_Monitor PHẢI tự động kích hoạt XDP_Filter ở chế độ strict mode và thông báo Master_Server về sự kiện tấn công trong vòng 5 giây
+12. NẾU reload hoặc reattach XDP_Filter thất bại 3 lần liên tiếp, THÌ Health_Monitor PHẢI ghi log critical error, gửi alert đến Master_Server (nếu có kết nối), và tiếp tục thử reload mỗi 60 giây cho đến khi thành công
+13. NẾU ghi snapshot ra disk thất bại (do lỗi I/O hoặc hết dung lượng), THÌ Health_Monitor PHẢI ghi log cảnh báo, giữ lại snapshot thành công gần nhất, và thử ghi lại ở chu kỳ tiếp theo (60 giây sau) mà không dừng hoạt động bảo vệ
+
+### Yêu Cầu 14: Gói Community Không Giới Hạn Thời Gian
+
+**Câu Chuyện Người Dùng:** Là người dùng miễn phí, tôi muốn gói Community luôn hoạt động vĩnh viễn mà không bị khóa khi hết hạn, và có thể nâng cấp lên gói cao hơn bất kỳ lúc nào, để tôi yên tâm sử dụng dịch vụ bảo vệ cơ bản lâu dài.
+
+#### Tiêu Chí Chấp Nhận
+
+1. KHI người dùng đăng ký mới, Master_Server PHẢI cấp license gói Community với thời hạn vô thời hạn (expiry_date = null hoặc giá trị đặc biệt "never") và trạng thái active
+2. KHI license gói Pro hoặc Enterprise đạt thời điểm hết hạn (ExpiresAt), Master_Server PHẢI tự động chuyển license về gói Community với trạng thái downgraded trong vòng 60 giây kể từ thời điểm hết hạn, thay vì khóa hoặc vô hiệu hóa license
+3. KHI license được chuyển từ gói cao hơn về Community, Master_Server PHẢI giữ nguyên machine fingerprint, license key, và lịch sử sử dụng — chỉ thay đổi mức Package_Plan, đặt expiry_date thành vô thời hạn, và vô hiệu hóa các tính năng vượt giới hạn Community (domain bảo vệ giảm về tối đa 1, XDP bị tắt, OTA bị tắt)
+4. Master_Server PHẢI cho phép nâng cấp từ gói Community lên Pro hoặc Enterprise bất kỳ lúc nào mà không yêu cầu tạo license mới hoặc cài đặt lại Client_Node — license key và machine fingerprint được giữ nguyên, chỉ cập nhật Package_Plan, tính năng khả dụng, và expiry_date mới
+5. KHI Client_Node nhận phản hồi heartbeat với Package_Plan = Community, Client_Node PHẢI tiếp tục hoạt động bình thường với tập tính năng Community (bảo vệ DDoS cơ bản, rate-limiting mặc định 60 request/phút/IP, challenge page) mà không hiển thị cảnh báo hết hạn hoặc giảm chức năng
+6. NẾU Master_Server không thể truy cập và license cached là gói Community, THÌ Client_Node PHẢI tiếp tục hoạt động với cấu hình Community cached mà không tự vô hiệu hóa, cho đến khi Master_Server trở lại khả dụng hoặc service bị dừng thủ công
+7. Master_Server PHẢI phân biệt rõ ràng giữa trạng thái license: active (đang hoạt động), suspended (bị tạm ngưng do vi phạm), và downgraded (đã hạ cấp từ gói cao hơn) — trạng thái suspended là trạng thái duy nhất ngăn Client_Node hoạt động
+8. Admin_UI PHẢI hiển thị trên trang chi tiết license mà không cần cuộn: trạng thái gói hiện tại (Community/Pro/Enterprise), trạng thái license (active/suspended/downgraded), ngày hết hạn gói cao cấp (nếu có), và nút nâng cấp cho license đang ở gói Community
+9. NẾU license có trạng thái suspended và đồng thời đạt thời điểm hết hạn gói Pro hoặc Enterprise, THÌ Master_Server PHẢI giữ nguyên trạng thái suspended mà không chuyển về Community — chỉ admin mới có thể gỡ trạng thái suspended
+10. KHI Client_Node nhận phản hồi heartbeat cho biết license có trạng thái suspended, THÌ Client_Node PHẢI ngừng xử lý traffic và trả về trang thông báo cho biết dịch vụ bị tạm ngưng cho tất cả request đến
+
+### Yêu Cầu 15: Cải Thiện Trải Nghiệm Cài Đặt (Install UX)
+
+**Câu Chuyện Người Dùng:** Là người vận hành máy chủ, tôi muốn quá trình cài đặt có giao diện đẹp với progress bar, màu sắc rõ ràng, và thông báo trạng thái chi tiết, để tôi biết chính xác tiến trình cài đặt và cảm thấy tự tin khi triển khai.
+
+#### Tiêu Chí Chấp Nhận
+
+1. Install_Script PHẢI hiển thị banner ASCII art logo Kiro WAF với màu teal/cyan khi bắt đầu cài đặt, bao gồm phiên bản script và URL master server
+2. Install_Script PHẢI hiển thị progress bar dạng thanh ngang (ví dụ: [████████░░░░░░░░] 50%) có chiều rộng tối thiểu 20 ký tự cho mỗi bước tải file, cập nhật ít nhất mỗi 1 giây hoặc mỗi 2% tiến trình (tùy điều kiện nào đến trước) dựa trên kích thước đã tải so với tổng kích thước
+3. Install_Script PHẢI hiển thị spinner animation (ký tự xoay ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏) với tốc độ 80-120ms mỗi frame cho các bước xử lý không xác định thời gian (phát hiện OS, cài đặt dependency, tạo service)
+4. Install_Script PHẢI sử dụng mã màu nhất quán: xanh lá (✓) cho thành công, đỏ (✗) cho lỗi, vàng (⚠) cho cảnh báo, cyan (→) cho thông tin tiến trình, và trắng đậm cho tiêu đề bước
+5. Install_Script PHẢI hiển thị số thứ tự bước dạng [N/T] (trong đó T là tổng số bước thực tế của luồng cài đặt hiện tại) trước mỗi giai đoạn cài đặt để người dùng biết tiến trình tổng thể
+6. KHI mỗi bước hoàn tất, Install_Script PHẢI hiển thị thời gian thực hiện bước đó tính bằng giây với 1 chữ số thập phân (ví dụ: "✓ Tải binary hoàn tất (3.2s)") và tổng thời gian đã trôi qua kể từ khi script bắt đầu
+7. KHI cài đặt hoàn tất thành công, Install_Script PHẢI hiển thị bảng tóm tắt có viền (box-drawing characters ┌─┐│└─┘) chứa: phiên bản đã cài, đường dẫn binary, trạng thái service (đang chạy/dừng), IP server, và danh sách lệnh hữu ích (status, log, restart, stop)
+8. NẾU bất kỳ bước nào thất bại, THÌ Install_Script PHẢI dừng spinner hoặc progress bar hiện tại, hiển thị thông báo lỗi với màu đỏ bao gồm tên bước thất bại, mô tả nguyên nhân có thể, và gợi ý hành động khắc phục liên quan đến bước đó (ví dụ: "Kiểm tra kết nối mạng" cho lỗi tải, "Xác minh license key" cho lỗi xác thực)
+9. Install_Script PHẢI hỗ trợ tham số --quiet hoặc -q để tắt tất cả animation (spinner, progress bar) và escape code màu, chỉ hiển thị mỗi dòng kết quả bước (thành công/thất bại) dạng text thuần cho môi trường CI/CD hoặc pipe
+10. NẾU terminal không hỗ trợ màu sắc (biến TERM=dumb hoặc output không phải TTY), THÌ Install_Script PHẢI tự động fallback sang output text thuần không có escape code màu và không có animation, giữ nguyên nội dung thông báo trạng thái của mỗi bước
+11. NẾU progress bar hoặc spinner đang hiển thị khi xảy ra lỗi, THÌ Install_Script PHẢI xóa dòng animation hiện tại trước khi in thông báo lỗi để tránh output bị chồng chéo

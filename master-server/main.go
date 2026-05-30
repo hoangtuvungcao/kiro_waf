@@ -60,6 +60,9 @@ func main() {
 	// Register routes.
 	mux := http.NewServeMux()
 
+	// Static assets (CSS, JS, images).
+	handlers.RegisterStaticRoutes(mux)
+
 	// Public routes.
 	mux.HandleFunc("/", handlers.HandleHomepage())
 	mux.HandleFunc("/healthz", handlers.HandleHealthz())
@@ -67,6 +70,9 @@ func main() {
 	// API routes.
 	mux.HandleFunc("/api/v1/heartbeat", handlers.HandleHeartbeat(database))
 	mux.HandleFunc("/api/v1/update/check", handlers.HandleUpdateCheck(database))
+
+	// Download routes (license key required).
+	handlers.RegisterDownloadRoutes(mux, database)
 
 	// Admin routes (with IP allowlist, brute-force, and session middleware).
 	handlers.RegisterAdminRoutes(mux, database, adminConfig)

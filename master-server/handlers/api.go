@@ -18,12 +18,25 @@ type heartbeatRequest struct {
 	Stats           map[string]any `json:"stats"`
 }
 
+// planConfigResponse is the plan configuration included in heartbeat responses.
+type planConfigResponse struct {
+	RPMPerIP   int  `json:"rpm_per_ip"`
+	SubnetRPM  int  `json:"subnet_rpm"`
+	MaxDomains int  `json:"max_domains"`
+	XDPEnabled bool `json:"xdp_enabled"`
+	OTAEnabled bool `json:"ota_enabled"`
+}
+
 // heartbeatResponse represents the response to a heartbeat request.
+// Includes Package_Plan and license status for client-side enforcement.
 type heartbeatResponse struct {
-	Valid     bool   `json:"valid"`
-	Lock      bool   `json:"lock"`
-	Status    string `json:"status,omitempty"`
-	ExpiresAt string `json:"expires_at,omitempty"`
+	Valid       bool                `json:"valid"`
+	Lock        bool                `json:"lock"`
+	Status      string              `json:"status,omitempty"`
+	Plan        string              `json:"plan,omitempty"`
+	ExpiresAt   string              `json:"expires_at,omitempty"`
+	PlanConfig  *planConfigResponse `json:"plan_config,omitempty"`
+	Reason      string              `json:"reason,omitempty"`
 }
 
 // updateCheckRequest represents the incoming update check payload.
@@ -90,14 +103,53 @@ func HandleHeartbeat(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		// Check license status — only "active" licenses are valid.
 		now := time.Now().UTC()
-		isActive := license.Status == "active" && license.ExpiresAt.After(now)
 
-		if !isActive {
+		// Revoked license → hard lock (cannot operate at all).
+		if license.Status == "revoked" {
 			writeJSON(w, http.StatusOK, heartbeatResponse{
-				Valid: false,
-				Lock:  true,
+				Valid:  false,
+				Lock:   true,
+				Status: "revoked",
+				Plan:   license.Plan,
+				Reason: "license_revoked",
+			})
+			return
+		}
+
+		// Suspended license → signal suspension (client stops traffic, shows suspension page).
+		// Per Requirement 14.7/14.10: suspended is the only state that prevents Client_Node from operating.
+		if license.Status == "suspended" {
+			writeJSON(w, http.StatusOK, heartbeatResponse{
+				Valid:  false,
+				Lock:   false,
+				Status: "suspended",
+				Plan:   license.Plan,
+				Reason: "license_suspended",
+			})
+			return
+		}
+
+		// Check license expiry — auto-downgrade to community instead of locking.
+		expired := license.ExpiresAt.Before(now)
+		if expired && license.Status == "active" {
+			// Mark license as expired in DB.
+			license.Status = "expired"
+			if err := database.UpdateLicenseStatus(license.LicenseID, "expired"); err != nil {
+				log.Printf("heartbeat: db error updating license status to expired: %v", err)
+			}
+		}
+
+		// Binary integrity check: if fingerprint_hash is set on the license,
+		// verify it matches the client's reported hash.
+		if license.FingerprintHash != "" && req.FingerprintHash != "" &&
+			license.FingerprintHash != req.FingerprintHash {
+			log.Printf("heartbeat: binary integrity mismatch for license=%s node=%s expected=%s got=%s",
+				license.LicenseID, req.NodeID, license.FingerprintHash, req.FingerprintHash)
+			writeJSON(w, http.StatusOK, heartbeatResponse{
+				Valid:  false,
+				Lock:   true,
+				Reason: "binary_integrity_mismatch",
 			})
 			return
 		}
@@ -113,7 +165,6 @@ func HandleHeartbeat(database *db.DB) http.HandlerFunc {
 		}
 		if err := database.LogHeartbeat(hb); err != nil {
 			log.Printf("heartbeat: db error logging heartbeat: %v", err)
-			// Non-fatal: still respond with license status.
 		}
 
 		// Update last heartbeat timestamp on the license.
@@ -121,11 +172,36 @@ func HandleHeartbeat(database *db.DB) http.HandlerFunc {
 			log.Printf("heartbeat: db error updating license heartbeat: %v", err)
 		}
 
+		// Build plan config response.
+		// If expired, downgrade to community plan config.
+		planName := license.Plan
+		if expired {
+			planName = "community"
+		}
+
+		var pc *planConfigResponse
+		if cfg, ok := models.PlanConfigs[planName]; ok {
+			pc = &planConfigResponse{
+				RPMPerIP:   cfg.RPMPerIP,
+				SubnetRPM:  cfg.SubnetRPM,
+				MaxDomains: cfg.MaxDomains,
+				XDPEnabled: cfg.XDPEnabled,
+				OTAEnabled: cfg.OTAEnabled,
+			}
+		}
+
+		status := license.Status
+		if expired {
+			status = "expired"
+		}
+
 		writeJSON(w, http.StatusOK, heartbeatResponse{
-			Valid:     true,
-			Lock:      false,
-			Status:    license.Status,
-			ExpiresAt: license.ExpiresAt.Format(time.RFC3339),
+			Valid:      !expired,
+			Lock:       false,
+			Status:     status,
+			Plan:       planName,
+			ExpiresAt:  license.ExpiresAt.Format(time.RFC3339),
+			PlanConfig: pc,
 		})
 	}
 }
@@ -200,8 +276,12 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // extractClientIP extracts the client IP from the request,
-// checking X-Forwarded-For and X-Real-IP headers first.
+// checking CF-Connecting-IP, X-Forwarded-For and X-Real-IP headers first.
 func extractClientIP(r *http.Request) string {
+	// Cloudflare sends the real client IP in this header.
+	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
+		return cfIP
+	}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		// Take the first IP in the chain.
 		for i, ch := range xff {

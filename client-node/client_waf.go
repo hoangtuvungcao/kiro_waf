@@ -7,6 +7,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -100,7 +103,7 @@ func main() {
 		MasterURL:       cfg.MasterURL,
 		LicenseKey:      cfg.LicenseKey,
 		NodeID:          cfg.NodeID,
-		FingerprintHash: "", // populated at runtime if needed
+		FingerprintHash: computeBinaryHash(),
 		Interval:        time.Duration(cfg.HeartbeatSeconds) * time.Second,
 		Stats:           nil,
 	}
@@ -150,6 +153,11 @@ func main() {
 	// Health check endpoint
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if lockdownMgr.IsSuspended() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"status":"suspended"}`))
+			return
+		}
 		if lockdownMgr.IsLocked() {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"status":"locked"}`))
@@ -233,10 +241,17 @@ func loadConfig() clientConfig {
 	}
 }
 
-// lockdownMiddleware wraps an http.Handler to block all traffic when in lockdown mode,
-// except from admin IPs.
+// lockdownMiddleware wraps an http.Handler to block all traffic when in lockdown mode
+// or when license is suspended.
+// - Lockdown: blocks all traffic except from admin IPs (heartbeat failure).
+// - Suspended: blocks all traffic and shows suspension page (Req 14.10).
 func lockdownMiddleware(lm *LockdownManager, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check suspended state first (Req 14.10).
+		if lm.IsSuspended() {
+			ServeSuspendedPage(w)
+			return
+		}
 		if lm.IsLocked() {
 			ip := clientIP(r)
 			if !lm.IsAdminIP(ip) {
@@ -315,4 +330,27 @@ func clientIP(r *http.Request) string {
 		return addr[:idx]
 	}
 	return addr
+}
+
+// computeBinaryHash computes the SHA-256 hash of the running binary for integrity verification.
+// Returns empty string if the binary cannot be read (non-fatal).
+func computeBinaryHash() string {
+	execPath, err := os.Executable()
+	if err != nil {
+		log.Printf("WARNING: cannot determine executable path for integrity check: %v", err)
+		return ""
+	}
+	f, err := os.Open(execPath)
+	if err != nil {
+		log.Printf("WARNING: cannot open executable for integrity check: %v", err)
+		return ""
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		log.Printf("WARNING: cannot hash executable for integrity check: %v", err)
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

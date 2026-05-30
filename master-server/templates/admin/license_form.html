@@ -4,8 +4,63 @@
     <p>{{if .IsEdit}}Cập nhật thông tin license{{else}}Điền thông tin để tạo license mới{{end}}</p>
 </div>
 
+{{if .IsEdit}}
+<!-- Plan Status Overview Card (Req 14.8) -->
+<div class="card plan-status-card" style="max-width: 720px; margin-bottom: 24px;">
+    <h3 style="margin-bottom: 16px; font-size: 1.1rem;">Trạng Thái Gói Dịch Vụ</h3>
+    <div class="plan-status-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px;">
+        <div class="plan-status-item">
+            <span class="plan-status-label" style="color: var(--kiro-text-secondary, #a0a0b0); font-size: 0.85rem; display: block;">Gói hiện tại</span>
+            <span class="plan-status-value" style="font-weight: 700; font-size: 1.1rem; text-transform: capitalize;">
+                {{if eq .License.Plan "community"}}🟢 Community{{else if eq .License.Plan "pro"}}🔵 Pro{{else if eq .License.Plan "enterprise"}}🟣 Enterprise{{else}}{{.License.Plan}}{{end}}
+            </span>
+        </div>
+        <div class="plan-status-item">
+            <span class="plan-status-label" style="color: var(--kiro-text-secondary, #a0a0b0); font-size: 0.85rem; display: block;">Trạng thái license</span>
+            <span class="plan-status-value" style="font-weight: 700; font-size: 1.1rem;">
+                {{if eq .License.Status "active"}}🟢 Active{{else if eq .License.Status "suspended"}}🔴 Suspended{{else if eq .License.Status "downgraded"}}🟡 Downgraded{{else if eq .License.Status "revoked"}}⚫ Revoked{{else if eq .License.Status "expired"}}🟠 Expired{{else}}{{.License.Status}}{{end}}
+            </span>
+        </div>
+        <div class="plan-status-item">
+            <span class="plan-status-label" style="color: var(--kiro-text-secondary, #a0a0b0); font-size: 0.85rem; display: block;">Ngày hết hạn</span>
+            <span class="plan-status-value" style="font-weight: 700; font-size: 1.1rem;">
+                {{if eq .License.Plan "community"}}Vô thời hạn{{else if .License.ExpiresAt.IsZero}}Vô thời hạn{{else}}{{.License.ExpiresAt.Format "02/01/2006"}}{{end}}
+            </span>
+        </div>
+        <div class="plan-status-item">
+            <span class="plan-status-label" style="color: var(--kiro-text-secondary, #a0a0b0); font-size: 0.85rem; display: block;">Số ngày hiệu lực</span>
+            <span class="plan-status-value" style="font-weight: 700; font-size: 1.1rem;">
+                {{if eq .License.Plan "community"}}∞{{else}}{{.License.ValidDays}} ngày{{end}}
+            </span>
+        </div>
+    </div>
+    {{if eq .License.Plan "community"}}
+    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--kiro-border, #2a2a3e);">
+        <p style="color: var(--kiro-text-secondary, #a0a0b0); font-size: 0.9rem; margin-bottom: 12px;">
+            Gói Community cung cấp bảo vệ cơ bản: rate-limit 60 rpm/IP, challenge page, 1 domain.
+            Nâng cấp lên Pro hoặc Enterprise để mở khóa XDP, OTA, và nhiều domain hơn.
+        </p>
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('plan').value='pro'; document.getElementById('valid_days').value='365'; document.getElementById('plan').scrollIntoView({behavior:'smooth'});" style="background: linear-gradient(135deg, var(--kiro-primary, #0d9488), var(--kiro-accent, #14b8a6)); border: none;">
+            ⬆️ Nâng cấp gói
+        </button>
+    </div>
+    {{end}}
+    {{if eq .License.Status "downgraded"}}
+    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--kiro-border, #2a2a3e);">
+        <p style="color: var(--kiro-warning, #f59e0b); font-size: 0.9rem; margin-bottom: 12px;">
+            ⚠️ License này đã bị hạ cấp từ gói cao hơn do hết hạn. Nâng cấp lại để khôi phục tính năng premium.
+        </p>
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('plan').value='pro'; document.getElementById('valid_days').value='365'; document.getElementById('plan').scrollIntoView({behavior:'smooth'});" style="background: linear-gradient(135deg, var(--kiro-primary, #0d9488), var(--kiro-accent, #14b8a6)); border: none;">
+            ⬆️ Nâng cấp lại
+        </button>
+    </div>
+    {{end}}
+</div>
+{{end}}
+
 <div class="card" style="max-width: 720px;">
-    <form method="POST" action="{{if .IsEdit}}/admin/licenses/{{.License.ID}}/edit{{else}}/admin/licenses{{end}}">
+    <form method="POST" action="{{if .IsEdit}}/admin/licenses/{{.License.ID}}{{else}}/admin/licenses{{end}}">
+        {{if .IsEdit}}<input type="hidden" name="_method" value="PUT">{{end}}
         <div class="form-row">
             <div class="form-group">
                 <label for="customer_id">Customer ID</label>
@@ -42,6 +97,7 @@
                 <select id="status" name="status">
                     <option value="active" {{if eq .License.Status "active"}}selected{{end}}>Active</option>
                     <option value="suspended" {{if eq .License.Status "suspended"}}selected{{end}}>Suspended</option>
+                    <option value="downgraded" {{if eq .License.Status "downgraded"}}selected{{end}}>Downgraded</option>
                     <option value="revoked" {{if eq .License.Status "revoked"}}selected{{end}}>Revoked</option>
                 </select>
             </div>

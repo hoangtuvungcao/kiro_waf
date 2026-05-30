@@ -1,0 +1,72 @@
+/* ==========================================================================
+   Kiro WAF — Brand Design Tokens
+   All CSS custom properties for the Kiro brand system.
+   Loaded on every UI page (homepage, admin, challenge).
+   ========================================================================== */
+
+:root {
+  /* Primary brand colors */
+  --kiro-primary: #0d9488;
+  --kiro-accent: #14b8a6;
+  --kiro-primary-rgb: 13, 148, 136;
+  --kiro-accent-rgb: 20, 184, 166;
+
+  /* Background and surface */
+  --kiro-background: #0f0f1a;
+  --kiro-surface: #1a1a2e;
+  --kiro-surface-rgb: 26, 26, 46;
+
+  /* Text */
+  --kiro-text-primary: #f0f0f0;
+  --kiro-text-secondary: #a0a0b0;
+
+  /* Border */
+  --kiro-border: #2a2a3e;
+
+  /* Status colors */
+  --kiro-success: #10b981;
+  --kiro-danger: #ef4444;
+  --kiro-warning: #f59e0b;
+
+  /* Derived tokens */
+  --kiro-primary-hover: #0f766e;
+  --kiro-accent-hover: #0d9488;
+  --kiro-surface-elevated: #22223a;
+  --kiro-border-light: #3a3a52;
+
+  /* Typography */
+  --kiro-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --kiro-font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* Spacing scale */
+  --kiro-space-xs: 0.25rem;
+  --kiro-space-sm: 0.5rem;
+  --kiro-space-md: 1rem;
+  --kiro-space-lg: 1.5rem;
+  --kiro-space-xl: 2rem;
+  --kiro-space-2xl: 3rem;
+
+  /* Border radius */
+  --kiro-radius-sm: 0.375rem;
+  --kiro-radius-md: 0.5rem;
+  --kiro-radius-lg: 0.75rem;
+  --kiro-radius-xl: 1rem;
+
+  /* Shadows */
+  --kiro-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --kiro-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --kiro-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --kiro-neon-glow: 0 0 8px rgba(13, 148, 136, 0.6), 0 0 16px rgba(13, 148, 136, 0.3);
+  --kiro-neon-glow-sm: 0 0 4px rgba(13, 148, 136, 0.5), 0 0 8px rgba(13, 148, 136, 0.2);
+
+  /* Transitions */
+  --kiro-transition-fast: 150ms ease;
+  --kiro-transition-base: 250ms ease;
+  --kiro-transition-slow: 350ms ease;
+
+  /* Z-index scale */
+  --kiro-z-dropdown: 100;
+  --kiro-z-sticky: 200;
+  --kiro-z-modal: 300;
+  --kiro-z-toast: 400;
+}

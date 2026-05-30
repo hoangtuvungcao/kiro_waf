@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"kiro_waf/client-node/ratelimit"
+	"kiro_waf/internal/client/ratelimit"
 
 	"pgregory.net/rapid"
 )

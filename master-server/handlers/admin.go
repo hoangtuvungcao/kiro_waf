@@ -219,7 +219,8 @@ func adminLicenseCreate(w http.ResponseWriter, r *http.Request, database *db.DB)
 }
 
 // handleAdminLicenseAction handles routes under /admin/licenses/:id/...
-// Supports: PUT /admin/licenses/:id, DELETE /admin/licenses/:id,
+// Supports: GET /admin/licenses/new (create form),
+// GET /admin/licenses/:id (edit form), PUT /admin/licenses/:id, DELETE /admin/licenses/:id,
 // POST /admin/licenses/:id/renew, POST /admin/licenses/:id/rotate, POST /admin/licenses/:id/revoke
 func handleAdminLicenseAction(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -229,6 +230,21 @@ func handleAdminLicenseAction(database *db.DB) http.HandlerFunc {
 
 		if len(parts) == 0 || parts[0] == "" {
 			http.NotFound(w, r)
+			return
+		}
+
+		// Handle /admin/licenses/new → render create form
+		if parts[0] == "new" && r.Method == http.MethodGet {
+			flash := admin.FlashFromRequest(r)
+			data := &admin.LicenseFormData{
+				PageData: flash,
+				IsEdit:   false,
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			if err := admin.RenderLicenseForm(w, data); err != nil {
+				log.Printf("admin: render new license form error: %v", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+			}
 			return
 		}
 
@@ -251,6 +267,8 @@ func handleAdminLicenseAction(database *db.DB) http.HandlerFunc {
 			adminLicenseRotate(w, r, database, id)
 		case action == "revoke" && r.Method == http.MethodPost:
 			adminLicenseRevoke(w, r, database, id)
+		case action == "upgrade" && r.Method == http.MethodPost:
+			adminLicenseUpgrade(w, r, database, id)
 		case action == "" && r.Method == http.MethodPut:
 			adminLicenseUpdate(w, r, database, id)
 		case action == "" && r.Method == http.MethodPost:
@@ -394,6 +412,53 @@ func adminLicenseRevoke(w http.ResponseWriter, r *http.Request, database *db.DB,
 	http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_success", "Thu hồi license thành công"), http.StatusSeeOther)
 }
 
+// adminLicenseUpgrade handles POST /admin/licenses/:id/upgrade.
+// Upgrades a license to a higher plan while preserving license_key and fingerprint.
+// Requirement 14.4: upgrade without creating new license or reinstalling Client_Node.
+func adminLicenseUpgrade(w http.ResponseWriter, r *http.Request, database *db.DB, id int64) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "Dữ liệu form không hợp lệ"), http.StatusSeeOther)
+		return
+	}
+
+	newPlan := strings.TrimSpace(r.FormValue("plan"))
+	validDaysStr := strings.TrimSpace(r.FormValue("valid_days"))
+
+	if newPlan != "pro" && newPlan != "enterprise" {
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "Gói nâng cấp phải là Pro hoặc Enterprise"), http.StatusSeeOther)
+		return
+	}
+
+	validDays := 365
+	if validDaysStr != "" {
+		if v, err := strconv.Atoi(validDaysStr); err == nil && v > 0 {
+			validDays = v
+		}
+	}
+
+	license, err := database.GetLicenseByID(id)
+	if err != nil || license == nil {
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "License không tồn tại"), http.StatusSeeOther)
+		return
+	}
+
+	// Preserve license_key and fingerprint, update plan + features + ExpiresAt.
+	now := time.Now().UTC()
+	license.Plan = newPlan
+	license.Status = "active"
+	license.ValidDays = validDays
+	license.ExpiresAt = now.AddDate(0, 0, validDays)
+
+	if err := database.UpdateLicense(license); err != nil {
+		log.Printf("admin: upgrade license error: %v", err)
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "Lỗi nâng cấp license"), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("Nâng cấp license thành công lên gói %s (%d ngày)", newPlan, validDays)
+	http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_success", msg), http.StatusSeeOther)
+}
+
 // handleAdminReleases handles GET /admin/releases (list) and POST /admin/releases (create).
 func handleAdminReleases(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -486,6 +551,20 @@ func handleAdminReleaseAction(database *db.DB) http.HandlerFunc {
 
 		if len(parts) == 0 || parts[0] == "" {
 			http.NotFound(w, r)
+			return
+		}
+
+		// Handle /admin/releases/new → render create form
+		if parts[0] == "new" && r.Method == http.MethodGet {
+			flash := admin.FlashFromRequest(r)
+			data := &admin.ReleaseFormData{
+				PageData: flash,
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			if err := admin.RenderReleaseForm(w, data); err != nil {
+				log.Printf("admin: render new release form error: %v", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+			}
 			return
 		}
 
