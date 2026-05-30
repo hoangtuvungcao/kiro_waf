@@ -251,6 +251,14 @@ func handleAdminLicenseAction(database *db.DB) http.HandlerFunc {
 			adminLicenseRotate(w, r, database, id)
 		case action == "revoke" && r.Method == http.MethodPost:
 			adminLicenseRevoke(w, r, database, id)
+		case action == "delete" && r.Method == http.MethodPost:
+			adminLicenseDelete(w, r, database, id)
+		case action == "activate" && r.Method == http.MethodPost:
+			adminLicenseActivate(w, r, database, id)
+		case action == "suspend" && r.Method == http.MethodPost:
+			adminLicenseSuspend(w, r, database, id)
+		case action == "upgrade" && r.Method == http.MethodPost:
+			adminLicenseUpgrade(w, r, database, id)
 		case action == "" && r.Method == http.MethodPut:
 			adminLicenseUpdate(w, r, database, id)
 		case action == "" && r.Method == http.MethodPost:
@@ -392,6 +400,89 @@ func adminLicenseRevoke(w http.ResponseWriter, r *http.Request, database *db.DB,
 	}
 
 	http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_success", "Thu hồi license thành công"), http.StatusSeeOther)
+}
+
+// adminLicenseActivate handles POST /admin/licenses/:id/activate.
+// Sets license status to "active".
+func adminLicenseActivate(w http.ResponseWriter, r *http.Request, database *db.DB, id int64) {
+	license, err := database.GetLicenseByID(id)
+	if err != nil || license == nil {
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "License không tồn tại"), http.StatusSeeOther)
+		return
+	}
+
+	license.Status = "active"
+	if err := database.UpdateLicense(license); err != nil {
+		log.Printf("admin: activate license error: %v", err)
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "Lỗi kích hoạt license"), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_success", "Kích hoạt license thành công"), http.StatusSeeOther)
+}
+
+// adminLicenseSuspend handles POST /admin/licenses/:id/suspend.
+// Sets license status to "suspended".
+func adminLicenseSuspend(w http.ResponseWriter, r *http.Request, database *db.DB, id int64) {
+	license, err := database.GetLicenseByID(id)
+	if err != nil || license == nil {
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "License không tồn tại"), http.StatusSeeOther)
+		return
+	}
+
+	license.Status = "suspended"
+	if err := database.UpdateLicense(license); err != nil {
+		log.Printf("admin: suspend license error: %v", err)
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "Lỗi tạm ngưng license"), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_success", "Tạm ngưng license thành công"), http.StatusSeeOther)
+}
+
+// adminLicenseUpgrade handles POST /admin/licenses/:id/upgrade.
+// Upgrades a license to a higher plan while preserving license_key and fingerprint.
+func adminLicenseUpgrade(w http.ResponseWriter, r *http.Request, database *db.DB, id int64) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "Dữ liệu form không hợp lệ"), http.StatusSeeOther)
+		return
+	}
+
+	newPlan := strings.TrimSpace(r.FormValue("plan"))
+	validDaysStr := strings.TrimSpace(r.FormValue("valid_days"))
+
+	if newPlan != "pro" && newPlan != "enterprise" {
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "Gói nâng cấp phải là Pro hoặc Enterprise"), http.StatusSeeOther)
+		return
+	}
+
+	validDays := 365
+	if validDaysStr != "" {
+		if v, err := strconv.Atoi(validDaysStr); err == nil && v > 0 {
+			validDays = v
+		}
+	}
+
+	license, err := database.GetLicenseByID(id)
+	if err != nil || license == nil {
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "License không tồn tại"), http.StatusSeeOther)
+		return
+	}
+
+	now := time.Now().UTC()
+	license.Plan = newPlan
+	license.Status = "active"
+	license.ValidDays = validDays
+	license.ExpiresAt = now.AddDate(0, 0, validDays)
+
+	if err := database.UpdateLicense(license); err != nil {
+		log.Printf("admin: upgrade license error: %v", err)
+		http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_error", "Lỗi nâng cấp license"), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("Nâng cấp license thành công lên gói %s (%d ngày)", newPlan, validDays)
+	http.Redirect(w, r, admin.RedirectWithFlash("/admin/licenses", "flash_success", msg), http.StatusSeeOther)
 }
 
 // handleAdminReleases handles GET /admin/releases (list) and POST /admin/releases (create).

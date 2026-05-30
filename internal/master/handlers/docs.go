@@ -233,6 +233,15 @@ func (h *DocsHandler) buildPageData(lang, path string) DocsPageData {
 			if page, ok := langPages[pageID]; ok {
 				data.Title = page.Title
 				data.Content = page.Content
+			} else {
+				// Page ID exists in URL but no content — show not found message.
+				if lang == "en" {
+					data.Title = "Page Not Found"
+					data.Content = `<div class="docs-welcome-card"><h2>Page Not Found</h2><p>The page you requested does not exist. Use the sidebar navigation to browse available documentation.</p></div>`
+				} else {
+					data.Title = "Trang Không Tồn Tại"
+					data.Content = `<div class="docs-welcome-card"><h2>Trang Không Tồn Tại</h2><p>Trang bạn yêu cầu không tồn tại. Sử dụng thanh điều hướng bên trái để duyệt tài liệu có sẵn.</p></div>`
+				}
 			}
 		}
 	}
