@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -155,7 +156,12 @@ func Run() int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start heartbeat loop
+	// Plan enforcement: XDP startup is deferred until first heartbeat confirms plan allows it.
+	// This ensures the plan's xdp_enabled flag is respected before starting XDP components.
+	var xdpStartOnce sync.Once
+	xdpCommandConfigured := cfg.XDPSyncCommand != ""
+
+	// Start heartbeat loop with plan enforcement callback
 	heartbeatConfig := HeartbeatConfig{
 		MasterURL:       cfg.MasterURL,
 		LicenseKey:      cfg.LicenseKey,
@@ -163,6 +169,29 @@ func Run() int {
 		FingerprintHash: "", // Disabled: binary hash changes on every deploy, causing lockouts
 		Interval:        time.Duration(cfg.HeartbeatSeconds) * time.Second,
 		Stats:           nil,
+		OnPlanConfig: func(planCfg *loopPlanConfig) {
+			// Enforce rate limit thresholds from plan
+			if planCfg.RPMPerIP > 0 || planCfg.SubnetRPM > 0 {
+				rateLimiter.UpdateThresholds(planCfg.RPMPerIP, 0, planCfg.SubnetRPM)
+				log.Printf("plan enforcement: rate limits updated rpm_per_ip=%d subnet_rpm=%d",
+					planCfg.RPMPerIP, planCfg.SubnetRPM)
+			}
+
+			// Enforce XDP: only start if BOTH env var is set AND plan allows it
+			if !planCfg.XDPEnabled {
+				log.Printf("plan enforcement: XDP disabled by plan")
+			} else if xdpCommandConfigured && XDPStartupFunc != nil {
+				xdpStartOnce.Do(func() {
+					log.Printf("plan enforcement: XDP enabled by plan, starting XDP components")
+					XDPStartupFunc(ctx, cfg.GeoIPCSVPath)
+				})
+			}
+
+			// Log OTA status
+			if !planCfg.OTAEnabled {
+				log.Printf("plan enforcement: OTA disabled by plan")
+			}
+		},
 	}
 	go StartHeartbeatLoop(ctx, heartbeatConfig, lockdownMgr)
 
@@ -246,11 +275,8 @@ func Run() int {
 		}
 	}()
 
-	// Wire XDP components if XDP is enabled (XDPSyncCommand is set)
-	xdpEnabled := cfg.XDPSyncCommand != ""
-	if xdpEnabled && XDPStartupFunc != nil {
-		XDPStartupFunc(ctx, cfg.GeoIPCSVPath)
-	}
+	// XDP startup is now deferred to plan enforcement callback (OnPlanConfig).
+	// XDP will only start if: env var KIRO_XDP_SYNC_COMMAND is set AND plan says xdp_enabled=true.
 
 	// Register HTTP routes
 	mux := http.NewServeMux()

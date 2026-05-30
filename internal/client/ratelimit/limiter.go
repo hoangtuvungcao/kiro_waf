@@ -172,6 +172,29 @@ func (s *SlidingWindowLimiter) HasSubnet(subnet string) bool {
 	return exists
 }
 
+// UpdateThresholds updates the rate limiter thresholds at runtime (thread-safe).
+// Only non-zero values are applied; zero values leave the existing threshold unchanged.
+func (s *SlidingWindowLimiter) UpdateThresholds(soft, hard, subnet int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if soft > 0 {
+		s.config.SoftThreshold = soft
+	}
+	if hard > 0 {
+		s.config.HardThreshold = hard
+	}
+	if subnet > 0 {
+		s.config.SubnetThreshold = subnet
+	}
+}
+
+// GetThresholds returns the current soft, hard, and subnet thresholds (thread-safe).
+func (s *SlidingWindowLimiter) GetThresholds() (soft, hard, subnet int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.config.SoftThreshold, s.config.HardThreshold, s.config.SubnetThreshold
+}
+
 // getOrCreateIPState lấy hoặc tạo mới ipState cho IP.
 // Caller phải giữ lock.
 func (s *SlidingWindowLimiter) getOrCreateIPState(ip string) *ipState {

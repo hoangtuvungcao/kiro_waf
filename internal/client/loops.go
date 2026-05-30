@@ -32,6 +32,10 @@ type HeartbeatConfig struct {
 
 	// Stats là thông tin bổ sung gửi kèm heartbeat (optional).
 	Stats map[string]any
+
+	// OnPlanConfig is called when plan_config is received from the master server.
+	// Used to enforce plan limits on the running system (rate limits, XDP, OTA).
+	OnPlanConfig func(cfg *loopPlanConfig)
 }
 
 // UpdateCheckConfig chứa cấu hình cho update check loop.
@@ -188,6 +192,9 @@ func sendHeartbeat(client *http.Client, config HeartbeatConfig, lockdown *Lockdo
 		log.Printf("heartbeat: plan_config received rpm_per_ip=%d subnet_rpm=%d max_domains=%d xdp=%v ota=%v",
 			result.PlanConfig.RPMPerIP, result.PlanConfig.SubnetRPM,
 			result.PlanConfig.MaxDomains, result.PlanConfig.XDPEnabled, result.PlanConfig.OTAEnabled)
+		if config.OnPlanConfig != nil {
+			config.OnPlanConfig(result.PlanConfig)
+		}
 	}
 
 	// Heartbeat thành công (or downgraded but not locked)
