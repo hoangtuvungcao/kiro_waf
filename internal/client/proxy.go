@@ -38,6 +38,9 @@ type ProxyConfig struct {
 
 	// ChallengeTTL là thời gian sống của challenge token.
 	ChallengeTTL time.Duration
+
+	// ChallengeAllNew khi true, mọi request không có cookie hợp lệ sẽ bị challenge ngay.
+	ChallengeAllNew bool
 }
 
 // ProxyHandler là reverse proxy handler chính cho Client_WAF.
@@ -54,6 +57,7 @@ type ProxyHandler struct {
 	holdSeconds    int
 	banDuration    time.Duration
 	challengeTTL   time.Duration
+	challengeAll   bool
 	reverseProxy   *httputil.ReverseProxy
 }
 
@@ -100,6 +104,7 @@ func NewProxyHandler(
 		holdSeconds:    config.HoldSeconds,
 		banDuration:    config.BanDuration,
 		challengeTTL:   config.ChallengeTTL,
+		challengeAll:   config.ChallengeAllNew,
 		reverseProxy:   rp,
 	}
 }
@@ -143,6 +148,12 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Step 3: Check access cookie
 	if h.hasValidCookie(r, ip) {
 		h.reverseProxy.ServeHTTP(w, r)
+		return
+	}
+
+	// Step 3b: If challenge-all-new mode, serve PoW challenge immediately
+	if h.challengeAll {
+		challenge.ServeChallengePage(w, r, h.challengeStore, h.difficulty, h.challengeTTL, ip)
 		return
 	}
 

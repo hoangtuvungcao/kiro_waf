@@ -43,6 +43,7 @@ type clientConfig struct {
 	HeartbeatSeconds int
 	UpdateSeconds    int
 	AdminIPs         []string
+	ChallengeAllNew  bool
 }
 
 // Run is the entry point for the Client_WAF application.
@@ -86,13 +87,14 @@ func Run() int {
 
 	proxyHandler := NewProxyHandler(
 		ProxyConfig{
-			BackendURL:   cfg.BackendURL,
-			CookieSecret: []byte(cfg.CookieSecret),
-			CookieTTL:    20 * time.Minute,
-			Difficulty:   cfg.PoWDifficulty,
-			HoldSeconds:  cfg.HoldSeconds,
-			BanDuration:  time.Duration(cfg.BlockTTLSeconds) * time.Second,
-			ChallengeTTL: 90 * time.Second,
+			BackendURL:      cfg.BackendURL,
+			CookieSecret:    []byte(cfg.CookieSecret),
+			CookieTTL:       20 * time.Minute,
+			Difficulty:      cfg.PoWDifficulty,
+			HoldSeconds:     cfg.HoldSeconds,
+			BanDuration:     time.Duration(cfg.BlockTTLSeconds) * time.Second,
+			ChallengeTTL:    90 * time.Second,
+			ChallengeAllNew: cfg.ChallengeAllNew,
 		},
 		cookieMgr,
 		rateLimiter,
@@ -240,6 +242,7 @@ func loadConfig() clientConfig {
 		HeartbeatSeconds: envInt("KIRO_HEARTBEAT_SECONDS", 60),
 		UpdateSeconds:    envInt("KIRO_UPDATE_SECONDS", 300),
 		AdminIPs:         adminIPs,
+		ChallengeAllNew:  os.Getenv("KIRO_CHALLENGE_ALL_NEW") == "true" || os.Getenv("KIRO_CHALLENGE_ALL_NEW") == "1",
 	}
 }
 

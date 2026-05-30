@@ -124,11 +124,12 @@ func TestServeChallengePage_NoExternalDependencies(t *testing.T) {
 
 	body := w.Body.String()
 	// Should not contain external URLs (http:// or https://) except internal /__kiro/ paths
+	// and SVG namespace declarations (xmlns="http://www.w3.org/2000/svg")
 	lines := strings.Split(body, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "http://") || strings.Contains(line, "https://") {
-			// Allow only internal references
-			if !strings.Contains(line, "/__kiro/") {
+			// Allow internal references and SVG namespace
+			if !strings.Contains(line, "/__kiro/") && !strings.Contains(line, "xmlns") {
 				t.Errorf("page contains external dependency: %s", strings.TrimSpace(line))
 			}
 		}
@@ -309,5 +310,285 @@ func TestStore_TakeWrongIP(t *testing.T) {
 	_, ok := store.Take(entry.Token, "5.6.7.8")
 	if ok {
 		t.Error("Take should fail for wrong IP")
+	}
+}
+
+func TestHoldPageResponseSizeUnder10KB(t *testing.T) {
+	store := NewStore()
+
+	// Use max-length NEXT URL: "/" + 2047 chars = 2048 chars total
+	maxNext := "/" + strings.Repeat("x", 2047)
+	req := httptest.NewRequest(http.MethodGet, maxNext, nil)
+	w := httptest.NewRecorder()
+
+	// holdSeconds = 999 (3 chars, max length)
+	ServeHoldPage(w, req, store, 999, 0, "192.168.1.1")
+
+	resp := w.Result()
+	bodyBytes := w.Body.Bytes()
+	bodyLen := len(bodyBytes)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if bodyLen >= 10240 {
+		t.Errorf("Hold page response size %d bytes exceeds 10KB limit (10240 bytes)", bodyLen)
+	}
+	t.Logf("Hold page response size: %d bytes (%.1f%% of 10KB budget)", bodyLen, float64(bodyLen)/10240*100)
+}
+
+func TestPoWPageResponseSizeUnder10KB(t *testing.T) {
+	store := NewStore()
+
+	// Use max-length NEXT URL: "/" + 2047 chars = 2048 chars total
+	maxNext := "/" + strings.Repeat("x", 2047)
+	req := httptest.NewRequest(http.MethodGet, maxNext, nil)
+	w := httptest.NewRecorder()
+
+	// difficulty = 99 (2 chars, max length)
+	ServeChallengePage(w, req, store, 99, 0, "192.168.1.1")
+
+	resp := w.Result()
+	bodyBytes := w.Body.Bytes()
+	bodyLen := len(bodyBytes)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if bodyLen >= 10240 {
+		t.Errorf("PoW page response size %d bytes exceeds 10KB limit (10240 bytes)", bodyLen)
+	}
+	t.Logf("PoW page response size: %d bytes (%.1f%% of 10KB budget)", bodyLen, float64(bodyLen)/10240*100)
+}
+
+func TestHoldPage_NoExternalDependencies(t *testing.T) {
+	store := NewStore()
+	req := httptest.NewRequest(http.MethodGet, "/__kiro/hold", nil)
+	w := httptest.NewRecorder()
+
+	ServeHoldPage(w, req, store, 2, 0, "10.0.0.1")
+
+	body := w.Body.String()
+	bodyLower := strings.ToLower(body)
+
+	// Requirement 5.4: No <link rel="stylesheet"> elements referencing external URLs
+	if strings.Contains(bodyLower, `<link rel="stylesheet"`) || strings.Contains(bodyLower, `<link rel='stylesheet'`) {
+		t.Error("Hold page contains <link rel=\"stylesheet\"> — external stylesheet not allowed")
+	}
+
+	// Requirement 5.5: No <script src="..."> elements referencing external URLs
+	if strings.Contains(bodyLower, `<script src=`) || strings.Contains(bodyLower, `<script src =`) {
+		t.Error("Hold page contains <script src=...> — external script not allowed")
+	}
+
+	// Requirement 5.7: No CSS @import rules
+	if strings.Contains(body, "@import") {
+		t.Error("Hold page contains @import — external CSS import not allowed")
+	}
+
+	// Requirement 5.8: No <img>, <iframe>, <object>, <embed>, <audio>, <video> with external src
+	externalMediaTags := []string{"<img", "<iframe", "<object", "<embed", "<audio", "<video"}
+	for _, tag := range externalMediaTags {
+		if strings.Contains(bodyLower, tag) {
+			t.Errorf("Hold page contains %s element — external media elements not allowed", tag)
+		}
+	}
+
+	// Requirement 5.6: No external fonts (no font-face with external url, no external font imports)
+	if strings.Contains(bodyLower, "@font-face") {
+		t.Error("Hold page contains @font-face — external fonts not allowed")
+	}
+
+	// Requirement 5.7: No url() values referencing external URLs in CSS
+	// Check for url() with http:// or https:// (external resources)
+	// Allow data: URIs and internal references
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		// Check for external url() in CSS
+		lower := strings.ToLower(line)
+		if strings.Contains(lower, "url(") {
+			// Allow data: URIs (e.g., url("data:image/svg+xml;base64,..."))
+			// Allow url(#id) references (SVG internal references)
+			// Disallow url("http://...") or url("https://...")
+			if strings.Contains(lower, `url("http`) || strings.Contains(lower, `url('http`) || strings.Contains(lower, `url(http`) {
+				t.Errorf("Hold page line %d contains url() with external URL: %s", i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+
+	// Requirements 5.4, 5.5, 5.7: No external URLs (http:// or https://) except:
+	// - SVG namespace declarations (xmlns="http://www.w3.org/2000/svg")
+	// - Internal /__kiro/ paths
+	for i, line := range lines {
+		if strings.Contains(line, "http://") || strings.Contains(line, "https://") {
+			// Allow SVG namespace URIs
+			if strings.Contains(line, "xmlns") {
+				continue
+			}
+			// Allow internal /__kiro/ paths
+			if strings.Contains(line, "/__kiro/") {
+				continue
+			}
+			t.Errorf("Hold page line %d contains external URL: %s", i+1, strings.TrimSpace(line))
+		}
+	}
+
+	// Requirement 5.1: All CSS within inline <style> tag (verify style tag exists)
+	if !strings.Contains(body, "<style>") {
+		t.Error("Hold page missing inline <style> element")
+	}
+
+	// Requirement 5.2: All JS within inline <script> tag (verify script tag exists without src)
+	if !strings.Contains(body, "<script>") {
+		t.Error("Hold page missing inline <script> element")
+	}
+
+	// Requirement 5.3: Only inline SVG or base64 data URIs for images
+	// Already covered by the checks above (no <img> tags, no external url())
+}
+
+func TestHoldPage_InlineSVGLogo(t *testing.T) {
+	store := NewStore()
+	req := httptest.NewRequest(http.MethodGet, "/__kiro/hold", nil)
+	w := httptest.NewRecorder()
+
+	ServeHoldPage(w, req, store, 2, 0, "10.0.0.1")
+
+	body := w.Body.String()
+	if !strings.Contains(body, "<svg") {
+		t.Error("Hold page missing inline <svg element")
+	}
+	if !strings.Contains(body, `role="img"`) {
+		t.Error("Hold page SVG missing role=\"img\" attribute")
+	}
+	if !strings.Contains(body, `aria-label`) {
+		t.Error("Hold page SVG missing aria-label attribute")
+	}
+}
+
+func TestPoWPage_InlineSVGLogo(t *testing.T) {
+	store := NewStore()
+	req := httptest.NewRequest(http.MethodGet, "/__kiro/challenge", nil)
+	w := httptest.NewRecorder()
+
+	ServeChallengePage(w, req, store, 4, 0, "10.0.0.1")
+
+	body := w.Body.String()
+	if !strings.Contains(body, "<svg") {
+		t.Error("PoW page missing inline <svg element")
+	}
+	if !strings.Contains(body, `role="img"`) {
+		t.Error("PoW page SVG missing role=\"img\" attribute")
+	}
+	if !strings.Contains(body, `aria-label`) {
+		t.Error("PoW page SVG missing aria-label attribute")
+	}
+}
+
+func TestHoldPage_CSSCustomProperties(t *testing.T) {
+	store := NewStore()
+	req := httptest.NewRequest(http.MethodGet, "/__kiro/hold", nil)
+	w := httptest.NewRecorder()
+
+	ServeHoldPage(w, req, store, 2, 0, "10.0.0.1")
+
+	body := w.Body.String()
+
+	// Verify :root contains all required CSS custom properties
+	requiredProps := []string{
+		"--kiro-primary",
+		"--kiro-accent",
+		"--kiro-background",
+		"--kiro-surface",
+		"--kiro-text-primary",
+		"--kiro-text-secondary",
+		"--kiro-border",
+		"--kiro-success",
+		"--kiro-danger",
+	}
+
+	// Verify :root selector exists
+	if !strings.Contains(body, ":root") {
+		t.Fatal("Hold page missing :root CSS selector")
+	}
+
+	for _, prop := range requiredProps {
+		if !strings.Contains(body, prop) {
+			t.Errorf("Hold page :root missing CSS custom property %q", prop)
+		}
+	}
+}
+
+func TestPoWPage_CSSCustomProperties(t *testing.T) {
+	store := NewStore()
+	req := httptest.NewRequest(http.MethodGet, "/__kiro/challenge", nil)
+	w := httptest.NewRecorder()
+
+	ServeChallengePage(w, req, store, 4, 0, "10.0.0.1")
+
+	body := w.Body.String()
+
+	// Verify :root contains all required CSS custom properties
+	requiredProps := []string{
+		"--kiro-primary",
+		"--kiro-accent",
+		"--kiro-background",
+		"--kiro-surface",
+		"--kiro-text-primary",
+		"--kiro-text-secondary",
+		"--kiro-border",
+		"--kiro-success",
+		"--kiro-danger",
+	}
+
+	// Verify :root selector exists
+	if !strings.Contains(body, ":root") {
+		t.Fatal("PoW page missing :root CSS selector")
+	}
+
+	for _, prop := range requiredProps {
+		if !strings.Contains(body, prop) {
+			t.Errorf("PoW page :root missing CSS custom property %q", prop)
+		}
+	}
+}
+
+func TestHoldPage_ResponsiveBreakpoints(t *testing.T) {
+	store := NewStore()
+	req := httptest.NewRequest(http.MethodGet, "/__kiro/hold", nil)
+	w := httptest.NewRecorder()
+
+	ServeHoldPage(w, req, store, 2, 0, "10.0.0.1")
+
+	body := w.Body.String()
+
+	// Verify media query for small screens (360px)
+	if !strings.Contains(body, "@media (max-width: 360px)") && !strings.Contains(body, "@media(max-width:360px)") && !strings.Contains(body, "@media (max-width:360px)") {
+		t.Error("Hold page missing responsive breakpoint @media (max-width: 360px)")
+	}
+
+	// Verify media query for large screens (1920px)
+	if !strings.Contains(body, "@media (min-width: 1920px)") && !strings.Contains(body, "@media(min-width:1920px)") && !strings.Contains(body, "@media (min-width:1920px)") {
+		t.Error("Hold page missing responsive breakpoint @media (min-width: 1920px)")
+	}
+}
+
+func TestPoWPage_ResponsiveBreakpoints(t *testing.T) {
+	store := NewStore()
+	req := httptest.NewRequest(http.MethodGet, "/__kiro/challenge", nil)
+	w := httptest.NewRecorder()
+
+	ServeChallengePage(w, req, store, 4, 0, "10.0.0.1")
+
+	body := w.Body.String()
+
+	// Verify media query for small screens (360px)
+	if !strings.Contains(body, "@media (max-width: 360px)") && !strings.Contains(body, "@media(max-width:360px)") && !strings.Contains(body, "@media (max-width:360px)") {
+		t.Error("PoW page missing responsive breakpoint @media (max-width: 360px)")
+	}
+
+	// Verify media query for large screens (1920px)
+	if !strings.Contains(body, "@media (min-width: 1920px)") && !strings.Contains(body, "@media(min-width:1920px)") && !strings.Contains(body, "@media (min-width:1920px)") {
+		t.Error("PoW page missing responsive breakpoint @media (min-width: 1920px)")
 	}
 }
