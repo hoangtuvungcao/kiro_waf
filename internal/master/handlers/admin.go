@@ -232,6 +232,21 @@ func handleAdminLicenseAction(database *db.DB) http.HandlerFunc {
 			return
 		}
 
+		// Handle /admin/licenses/new → render create form
+		if parts[0] == "new" && r.Method == http.MethodGet {
+			flash := admin.FlashFromRequest(r)
+			data := &admin.LicenseFormData{
+				PageData: flash,
+				IsEdit:   false,
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			if err := admin.RenderLicenseForm(w, data); err != nil {
+				log.Printf("admin: render new license form error: %v", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+			}
+			return
+		}
+
 		id, err := strconv.ParseInt(parts[0], 10, 64)
 		if err != nil {
 			http.NotFound(w, r)
@@ -579,6 +594,20 @@ func handleAdminReleaseAction(database *db.DB) http.HandlerFunc {
 
 		if len(parts) == 0 || parts[0] == "" {
 			http.NotFound(w, r)
+			return
+		}
+
+		// Handle /admin/releases/new → render create form
+		if parts[0] == "new" && r.Method == http.MethodGet {
+			flash := admin.FlashFromRequest(r)
+			data := &admin.ReleaseFormData{
+				PageData: flash,
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			if err := admin.RenderReleaseForm(w, data); err != nil {
+				log.Printf("admin: render new release form error: %v", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+			}
 			return
 		}
 
