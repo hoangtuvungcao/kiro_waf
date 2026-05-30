@@ -246,7 +246,7 @@ func TestVerifyTransparent_SingleUse(t *testing.T) {
 func TestVerifyTransparent_SolveTimeTooFast(t *testing.T) {
 	store := NewStore()
 	clientIP := "192.168.1.100"
-	// Issue token just now (solve time will be < 50ms)
+	// Issue token just now (solve time will be < 20ms)
 	entry := store.IssueAt(clientIP, 0, 30*time.Second, time.Now().UTC())
 	esc := &mockEscalator{}
 
@@ -270,7 +270,7 @@ func TestVerifyTransparent_SolveTimeTooFast(t *testing.T) {
 	result := VerifyTransparent(w, req, store, clientIP, esc)
 
 	if result {
-		t.Error("expected VerifyTransparent to reject submissions faster than 50ms")
+		t.Error("expected VerifyTransparent to reject submissions faster than 20ms")
 	}
 	if w.Code != http.StatusForbidden {
 		t.Errorf("expected HTTP 403, got %d", w.Code)

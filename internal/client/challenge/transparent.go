@@ -94,9 +94,10 @@ func VerifyTransparent(w http.ResponseWriter, r *http.Request, store *Store, cli
 		return false
 	}
 
-	// Check minimum solve time (reject submissions faster than 50ms)
+	// Check minimum solve time (reject submissions faster than 20ms)
+	// 20ms is enough to filter pure replay attacks while keeping UX fast
 	solveTime := time.Since(entry.IssuedAt)
-	if solveTime.Milliseconds() < 50 {
+	if solveTime.Milliseconds() < 20 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"error":"solve time too fast"}`))
@@ -150,4 +151,6 @@ func VerifyTransparent(w http.ResponseWriter, r *http.Request, store *Store, cli
 // Must be <2KB total. Auto-solves in <100ms without user interaction.
 // Computes HMAC-based proof (simple XOR hash), collects browser fingerprint,
 // POSTs to /__kiro/transparent/verify endpoint.
-const transparentChallengeHTML = `<html><body><script>(function(){var t="{{TOKEN}}",s="{{SALT}}",n="{{NEXT}}";function hm(k,m){var r=0,i;for(i=0;i<k.length;i++)r=((r<<5)-r+k.charCodeAt(i))|0;for(i=0;i<m.length;i++)r=((r<<5)-r+m.charCodeAt(i))|0;return r.toString(16)}var sol=hm(s,t);var cv="",wg="",tz=0,wd=false;try{var c=document.createElement("canvas");c.width=16;c.height=16;var x=c.getContext("2d");x.fillStyle="#f00";x.fillRect(0,0,16,16);x.fillStyle="#0f0";x.font="6px a";x.fillText("K",2,12);cv=c.toDataURL().slice(-32)}catch(e){}try{var g=document.createElement("canvas").getContext("webgl");wg=g?g.getParameter(g.RENDERER)||"x":""}catch(e){}try{tz=new Date().getTimezoneOffset()}catch(e){}try{wd=!!navigator.webdriver}catch(e){}var b=JSON.stringify({token:t,solution:sol,fp:{canvas:cv,webgl:wg,tz:tz,wd:wd}});var h=new XMLHttpRequest();h.open("POST","/__kiro/transparent/verify",true);h.setRequestHeader("Content-Type","application/json");h.onload=function(){if(h.status===200)location.href=n};h.send(b)})()</script></body></html>`
+// Uses fetch API for speed. On success, server returns 302 with Set-Cookie,
+// browser follows redirect automatically — zero JS redirect overhead.
+const transparentChallengeHTML = `<html><body><script>(function(){var t="{{TOKEN}}",s="{{SALT}}",n="{{NEXT}}";function hm(k,m){var r=0,i;for(i=0;i<k.length;i++)r=((r<<5)-r+k.charCodeAt(i))|0;for(i=0;i<m.length;i++)r=((r<<5)-r+m.charCodeAt(i))|0;return r.toString(16)}var sol=hm(s,t);var cv="",wg="",tz=0,wd=false;try{var c=document.createElement("canvas");c.width=16;c.height=16;var x=c.getContext("2d");x.fillStyle="#f00";x.fillRect(0,0,16,16);x.fillStyle="#0f0";x.font="6px a";x.fillText("K",2,12);cv=c.toDataURL().slice(-32)}catch(e){}try{var g=document.createElement("canvas").getContext("webgl");wg=g?g.getParameter(g.RENDERER)||"x":""}catch(e){}try{tz=new Date().getTimezoneOffset()}catch(e){}try{wd=!!navigator.webdriver}catch(e){}fetch("/__kiro/transparent/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:t,solution:sol,fp:{canvas:cv,webgl:wg,tz:tz,wd:wd}}),redirect:"follow",credentials:"same-origin"}).then(function(r){location.replace(n)})})()</script></body></html>`
