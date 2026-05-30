@@ -76,3 +76,31 @@ func (d *DB) UpdateLicenseStatusCtx(ctx context.Context, licenseID string, statu
 	}
 	return nil
 }
+
+// GetLicenseByIDCtx retrieves a license by its license_id field using the provided context.
+// This is the fallback lookup when a user provides license_id instead of license_key
+// (e.g., when copying from admin panel which displays license_id).
+func (d *DB) GetLicenseByIDCtx(ctx context.Context, licenseID string) (*models.License, error) {
+	query := `SELECT id, license_id, license_key, customer_id, customer_name, client_ip,
+		fingerprint_hash, plan, status, valid_days, created_at, expires_at,
+		COALESCE(last_heartbeat_at, ''), notes
+		FROM licenses WHERE license_id = ?`
+
+	l := &models.License{}
+	var lastHB string
+	err := d.conn.QueryRowContext(ctx, query, licenseID).Scan(
+		&l.ID, &l.LicenseID, &l.LicenseKey, &l.CustomerID, &l.CustomerName,
+		&l.ClientIP, &l.FingerprintHash, &l.Plan, &l.Status, &l.ValidDays,
+		&l.CreatedAt, &l.ExpiresAt, &lastHB, &l.Notes,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: get license by id ctx: %w", err)
+	}
+	if lastHB != "" {
+		l.LastHeartbeat, _ = time.Parse(time.DateTime, lastHB)
+	}
+	return l, nil
+}

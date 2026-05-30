@@ -100,6 +100,12 @@ func HandleHeartbeat(database *db.DB) http.HandlerFunc {
 			return
 		}
 
+		// Fallback: if not found by license_key, try by license_id.
+		// This handles the case where admin panel shows license_id to users.
+		if license == nil {
+			license, _ = database.GetLicenseByLicenseID(req.LicenseKey)
+		}
+
 		// Invalid license key → respond with valid: false, lock: true.
 		if license == nil {
 			writeJSON(w, http.StatusOK, heartbeatResponse{

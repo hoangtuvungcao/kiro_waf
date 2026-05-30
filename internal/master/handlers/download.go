@@ -46,6 +46,11 @@ func validateLicenseKey(r *http.Request, database *db.DB) bool {
 		return false
 	}
 
+	// Fallback: try by license_id if not found by license_key
+	if license == nil {
+		license, _ = database.GetLicenseByIDCtx(ctx, key)
+	}
+
 	if license == nil {
 		return false
 	}
