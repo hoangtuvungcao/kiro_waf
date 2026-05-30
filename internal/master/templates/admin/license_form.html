@@ -5,7 +5,8 @@
 </div>
 
 <div class="card" style="max-width: 720px;">
-    <form method="POST" action="{{if .IsEdit}}/admin/licenses/{{.License.ID}}/edit{{else}}/admin/licenses{{end}}">
+    <form method="POST" action="{{if .IsEdit}}/admin/licenses/{{.License.ID}}{{else}}/admin/licenses{{end}}">
+        {{if .IsEdit}}<input type="hidden" name="_method" value="PUT">{{end}}
         <div class="form-row">
             <div class="form-group">
                 <label for="customer_id">Customer ID</label>
