@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 	"time"
 
 	"kiro_waf/internal/client/ban"
@@ -128,18 +127,6 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip := ClientIP(r)
-
-	// Bypass WAF protection for admin, API, docs, static, and system paths.
-	// These paths are protected by their own auth (admin session, license key, etc.)
-	if strings.HasPrefix(r.URL.Path, "/admin") ||
-		strings.HasPrefix(r.URL.Path, "/api/") ||
-		strings.HasPrefix(r.URL.Path, "/docs") ||
-		strings.HasPrefix(r.URL.Path, "/static/") ||
-		strings.HasPrefix(r.URL.Path, "/install") ||
-		r.URL.Path == "/healthz" {
-		h.reverseProxy.ServeHTTP(w, r)
-		return
-	}
 
 	// Step 1: Check User-Agent for automation tools
 	if ua.IsAutomationUA(r.UserAgent()) {
