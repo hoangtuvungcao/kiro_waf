@@ -71,6 +71,7 @@ func main() {
 	mux.HandleFunc("/", handlers.HandleHomepage())
 	mux.HandleFunc("/healthz", handlers.HandleHealthz())
 	mux.HandleFunc("/install", handlers.HandleInstallScript())
+	mux.HandleFunc("/install.sh", handlers.HandleInstallScript())
 
 	// API routes.
 	mux.HandleFunc("/api/v1/heartbeat", handlers.HandleHeartbeat(database))
