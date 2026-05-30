@@ -1060,11 +1060,11 @@ enable_and_start_service() {
 health_check() {
     log_info "Đang kiểm tra sức khỏe hệ thống..."
 
-    local retries=3
+    local retries=5
     local wait=2
 
     for i in $(seq 1 $retries); do
-        if curl -sf -o /dev/null "http://127.0.0.1:80/__kiro/health" 2>/dev/null; then
+        if curl -sf -o /dev/null "http://127.0.0.1:80/healthz" 2>/dev/null; then
             log_success "Health check thành công"
             return 0
         fi
