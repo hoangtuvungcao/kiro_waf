@@ -543,6 +543,7 @@ parse_args() {
     LICENSE_KEY=""
     XDP_MODE="false"
     QUIET=0
+    BACKEND_URL=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -571,6 +572,18 @@ parse_args() {
                     exit 1
                 fi
                 ;;
+            --backend-url)
+                if [[ -n "${2:-}" ]]; then
+                    BACKEND_URL="$2"
+                    shift 2
+                else
+                    print_error_with_suggestion \
+                        "Phân tích tham số" \
+                        "Thiếu giá trị cho --backend-url" \
+                        "Cung cấp URL backend: --backend-url http://127.0.0.1:8080"
+                    exit 1
+                fi
+                ;;
             --xdp-mode)
                 XDP_MODE="true"
                 shift
@@ -580,11 +593,12 @@ parse_args() {
                 shift
                 ;;
             --help|-h)
-                echo "Sử dụng: bash install-client.sh [--license-key <LICENSE_KEY>] [--master-url <URL>] [--xdp-mode] [--quiet]"
+                echo "Sử dụng: bash install-client.sh [--license-key <LICENSE_KEY>] [--master-url <URL>] [--backend-url <URL>] [--xdp-mode] [--quiet]"
                 echo ""
                 echo "Tùy chọn:"
                 echo "  --license-key <KEY>   License key từ Kiro WAF (tùy chọn, tự đăng ký Community nếu bỏ qua)"
                 echo "  --master-url <URL>    URL master server (mặc định: https://firewall.vpsgen.com)"
+                echo "  --backend-url <URL>   URL backend cần bảo vệ (mặc định: http://127.0.0.1:8080)"
                 echo "  --xdp-mode            Cài đặt dependency build XDP (clang, llvm, libbpf-dev)"
                 echo "  --quiet, -q           Tắt animation và màu sắc (cho CI/CD)"
                 echo "  --help, -h            Hiển thị trợ giúp"
@@ -980,29 +994,44 @@ create_config() {
 
     log_info "Đang tạo cấu hình mới..."
 
-    # Hỏi backend URL cho lần cài đặt đầu tiên
-    local backend_url=""
-
-    echo ""
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${CYAN}  Nhập URL backend (website cần bảo vệ)${NC}"
-    echo -e "${CYAN}  Ví dụ: http://127.0.0.1:8080 hoặc http://localhost:3000${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    read -rp "Backend URL: " backend_url
+    # Sử dụng backend URL từ flag hoặc hỏi interactive
+    local backend_url="${BACKEND_URL:-}"
 
     if [[ -z "$backend_url" ]]; then
-        backend_url="http://127.0.0.1:8080"
-        log_warn "Sử dụng backend URL mặc định: ${backend_url}"
+        # Non-interactive mode (piped input or --quiet): use default
+        if [[ ! -t 0 ]] || [[ "${QUIET:-0}" == "1" ]]; then
+            backend_url="http://127.0.0.1:8080"
+            log_info "Sử dụng backend URL mặc định: ${backend_url}"
+        else
+            echo ""
+            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${CYAN}  Nhập URL backend (website cần bảo vệ)${NC}"
+            echo -e "${CYAN}  Ví dụ: http://127.0.0.1:8080 hoặc http://localhost:3000${NC}"
+            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+            read -rp "Backend URL: " backend_url
+
+            if [[ -z "$backend_url" ]]; then
+                backend_url="http://127.0.0.1:8080"
+                log_warn "Sử dụng backend URL mặc định: ${backend_url}"
+            fi
+        fi
     fi
 
     # Ghi file environment mới
+    # Generate random cookie secret
+    local cookie_secret
+    cookie_secret=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 40)
+
     cat > "$ENV_FILE" << EOF
 # Kiro WAF Client - Cấu hình
 # Được tạo bởi install-client.sh vào $(date '+%Y-%m-%d %H:%M:%S')
 
 # License key xác thực với master server
 KIRO_LICENSE_KEY=${LICENSE_KEY}
+
+# Cookie secret cho HMAC-SHA256 (tự động sinh, KHÔNG chia sẻ)
+KIRO_CLIENT_COOKIE_SECRET=${cookie_secret}
 
 # URL master server
 KIRO_MASTER_URL=${MASTER_URL}
@@ -1011,7 +1040,19 @@ KIRO_MASTER_URL=${MASTER_URL}
 KIRO_BACKEND_URL=${backend_url}
 
 # Cổng lắng nghe (mặc định: 80)
-KIRO_LISTEN_ADDR=:80
+KIRO_CLIENT_LISTEN=:80
+
+# Node ID
+KIRO_NODE_ID=$(hostname)
+
+# Heartbeat interval (giây)
+KIRO_HEARTBEAT_SECONDS=30
+
+# Challenge tất cả visitor mới
+KIRO_CHALLENGE_ALL_NEW=true
+
+# Cookie TTL (giây, mặc định: 1800 = 30 phút)
+KIRO_COOKIE_SHORT_TTL=1800
 
 # Đường dẫn XDP object
 KIRO_XDP_PATH=${XDP_FILE}
