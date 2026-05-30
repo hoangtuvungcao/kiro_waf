@@ -111,6 +111,13 @@ func NewProxyHandler(
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ip := h.extractClientIP(r)
 
+	// Bypass WAF for internal kiro endpoints that must be publicly accessible
+	// without challenge (install script, health check, API endpoints)
+	if isPassthroughPath(r.URL.Path) {
+		h.reverseProxy.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/__kiro/challenge/verify" {
 		h.handleChallengeVerify(w, r, ip)
 		return
@@ -347,4 +354,27 @@ func (h *ProxyHandler) hasValidCookie(r *http.Request, ip string) bool {
 	}
 	valid, _ := h.cookieMgr.ValidateCookie(c.Value, ip, h.cookieSecret)
 	return valid
+}
+
+// isPassthroughPath returns true for paths that should bypass WAF challenge
+// and be proxied directly to the backend (master server endpoints).
+// These include: install script, API endpoints, docs, health check, admin panel.
+func isPassthroughPath(path string) bool {
+	switch {
+	case path == "/install" || path == "/install.sh":
+		return true
+	case path == "/healthz":
+		return true
+	case len(path) >= 5 && path[:5] == "/api/":
+		return true
+	case len(path) >= 6 && path[:6] == "/docs/":
+		return true
+	case len(path) >= 7 && path[:7] == "/admin/":
+		return true
+	case path == "/admin":
+		return true
+	case len(path) >= 8 && path[:8] == "/static/":
+		return true
+	}
+	return false
 }
