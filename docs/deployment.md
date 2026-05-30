@@ -5,31 +5,46 @@
 ```mermaid
 graph TB
     subgraph Master VPS
-        MS[Master Server<br/>firewall.vpsgen.com]
+        MS[kiro-master<br/>firewall.vpsgen.com:8080]
         AdminUI[Admin UI :443]
-        API[API :443/api]
-        DB[(Database)]
+        API[API :443/api/v1]
+        DB[(SQLite)]
     end
 
     subgraph Client VPS 1
-        C1[kiro-client-waf]
-        N1[Nginx]
+        C1[kiro-client-waf :8090]
         XDP1[XDP Filter]
         App1[Backend App]
     end
 
     subgraph Client VPS 2
-        C2[kiro-client-waf]
-        N2[Nginx]
+        C2[kiro-client-waf :8090]
         XDP2[XDP Filter]
         App2[Backend App]
     end
 
     MS -->|License + Updates| C1
     MS -->|License + Updates| C2
-    C1 --> N1 --> App1
-    C2 --> N2 --> App2
+    C1 --> App1
+    C2 --> App2
 ```
+
+## Binaries
+
+| Binary | Build output | Install path | Purpose |
+|--------|-------------|--------------|---------|
+| `kiro-master` | `build/kiro-master` | `/usr/local/bin/kiro-master` | Master server (control plane, admin UI, API, docs) |
+| `kiro-client` | `build/kiro-client` | `/usr/local/bin/kiro-client-waf` | Client WAF (reverse proxy + XDP filter) |
+| `kiro-cli` | `build/kiro-cli` | `/usr/local/bin/kiro-cli` | CLI administration tool |
+
+**Note:** The binary is built as `kiro-client` but installed as `kiro-client-waf` on the VPS.
+
+## Systemd Services
+
+| Service | Binary | Config |
+|---------|--------|--------|
+| `kiro-master.service` | `/usr/local/bin/kiro-master` | `/etc/kiro-master/master.env` |
+| `kiro-client-waf.service` | `/usr/local/bin/kiro-client-waf` | `/etc/kiro/client-waf.env` |
 
 ## VPS Deployment (Ubuntu 22.04/24.04)
 
@@ -59,161 +74,163 @@ systemctl disable --now ufw 2>/dev/null || true
 
 ## Master Server Setup
 
-### Bước 1: Deploy Master
+### Option A: Automated Deploy Script
 
 ```bash
-# Tải và chạy deploy script
-curl -fsSL https://raw.githubusercontent.com/your-repo/kiro_waf/main/scripts/deploy_master.sh | bash
+# Clone project lên VPS
+git clone https://github.com/vantrong/kiro_waf.git /opt/kiro_waf
+cd /opt/kiro_waf
+
+# Chạy deploy script (build + install + configure + start)
+sudo bash scripts/deploy_master.sh
 ```
 
-Hoặc manual:
+Script `deploy_master.sh` thực hiện:
+1. Cài đặt system dependencies (Go, clang, nginx, etc.)
+2. Build binaries: `kiro-master`, `kiro-client-waf`, XDP object
+3. Tạo users và directories
+4. Generate secrets và environment files
+5. Install systemd services
+6. Configure Nginx reverse proxy
+7. Start services và health check
+
+### Option B: Manual Deploy
+
+#### Bước 1: Build binaries
 
 ```bash
-# Tải binary
-wget -O /usr/local/bin/kiro-master https://firewall.vpsgen.com/download/kiro-master
-chmod +x /usr/local/bin/kiro-master
-
-# Tạo thư mục
-mkdir -p /etc/kiro /var/lib/kiro /var/log/kiro
+cd /opt/kiro_waf
+make build
 ```
 
-### Bước 2: Cấu hình Master
+Output:
+```
+build/kiro-master
+build/kiro-client
+build/kiro-cli
+```
+
+#### Bước 2: Install binaries
 
 ```bash
-cat > /etc/kiro/master.yaml << 'EOF'
-server:
-  listen: ":8443"
-  domain: firewall.vpsgen.com
-  tls:
-    cert_file: /etc/letsencrypt/live/firewall.vpsgen.com/fullchain.pem
-    key_file: /etc/letsencrypt/live/firewall.vpsgen.com/privkey.pem
+sudo install -m 0755 build/kiro-master /usr/local/bin/kiro-master
+sudo install -m 0755 build/kiro-client /usr/local/bin/kiro-client-waf
+sudo install -m 0755 build/kiro-cli /usr/local/bin/kiro-cli
+```
 
-database:
-  path: /var/lib/kiro/master.db
+#### Bước 3: Create directories
 
-admin:
-  username: admin
-  # Đổi password ngay sau deploy
-  password_hash: "$2a$10$..."
+```bash
+sudo mkdir -p /etc/kiro-master /var/lib/kiro-master
+sudo mkdir -p /etc/kiro /var/lib/kiro /var/log/kiro
+```
 
-updates:
-  releases_dir: /var/lib/kiro/releases
-  channel: stable
+#### Bước 4: Configure Master environment
+
+```bash
+sudo cat > /etc/kiro-master/master.env << 'EOF'
+KIRO_MASTER_ADDR=127.0.0.1:8080
+KIRO_MASTER_DB=/var/lib/kiro-master/master.db
+KIRO_MASTER_ADMIN_KEY=YOUR-RANDOM-SECRET-KEY
+KIRO_MASTER_ADMIN_IPS=
+KIRO_MASTER_SESSION_TTL=12h
 EOF
+sudo chmod 640 /etc/kiro-master/master.env
 ```
 
-### Bước 3: Systemd Service
+#### Bước 5: Install systemd services
 
 ```bash
-cat > /etc/systemd/system/kiro-master.service << 'EOF'
-[Unit]
-Description=Kiro WAF Master Server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/kiro-master --config /etc/kiro/master.yaml
-Restart=on-failure
-RestartSec=5
-LimitNOFILE=65535
-User=kiro
-Group=kiro
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Tạo user
-useradd -r -s /bin/false kiro
-chown -R kiro:kiro /var/lib/kiro /var/log/kiro
-
-# Start
-systemctl daemon-reload
-systemctl enable --now kiro-master
+sudo cp deployments/systemd/kiro-master.service /etc/systemd/system/
+sudo cp deployments/systemd/kiro-client-waf.service /etc/systemd/system/
+sudo systemctl daemon-reload
 ```
 
-### Bước 4: SSL Certificate
+#### Bước 6: Start Master
+
+```bash
+sudo systemctl enable --now kiro-master
+```
+
+#### Bước 7: SSL Certificate
 
 ```bash
 # Dùng certbot
-apt install -y certbot
-certbot certonly --standalone -d firewall.vpsgen.com
-
-# Hoặc dùng Cloudflare Origin CA
+apt install -y certbot python3-certbot-nginx
+certbot --nginx -d firewall.vpsgen.com
 ```
 
 ## Client Node Setup
 
-### Bước 1: Install Client
+### Option A: Auto-install (khuyến nghị)
 
 ```bash
-# Auto-install (khuyến nghị)
-curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --key KIRO-XXXX-XXXX
+# Community (tự đăng ký, không cần key)
+curl -fsSL https://firewall.vpsgen.com/install.sh | bash
 
-# Hoặc manual
-wget -O /usr/local/bin/kiro-client https://firewall.vpsgen.com/download/kiro-client
-wget -O /usr/local/bin/kiro-cli https://firewall.vpsgen.com/download/kiro-cli
-chmod +x /usr/local/bin/kiro-client /usr/local/bin/kiro-cli
+# Pro/Enterprise (có license key)
+curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --license-key KIRO-XXXX-XXXX
 ```
 
-### Bước 2: Cấu hình
+### Option B: Manual install
 
 ```bash
-cat > /etc/kiro/kiro.yaml << 'EOF'
-mode: full
-plan: professional
-license_key: KIRO-XXXX-XXXX
+# Tải binary
+curl -fsSL -H "X-License-Key: YOUR-KEY" \
+  https://firewall.vpsgen.com/api/v1/download/client-waf \
+  -o /usr/local/bin/kiro-client-waf
+curl -fsSL https://firewall.vpsgen.com/download/kiro-cli \
+  -o /usr/local/bin/kiro-cli
+chmod +x /usr/local/bin/kiro-client-waf /usr/local/bin/kiro-cli
+```
 
-admin:
-  allow_ips:
-    - YOUR_IP/32
+### Configure Client environment
 
-server:
-  interface: eth0
-  ssh_port: 22
-
-website:
-  enabled: true
-  cloudflare: true
-  tls_mode: flexible_http
-  sites:
-    - domains:
-        - yourdomain.com
-        - www.yourdomain.com
-      backend: http://127.0.0.1:3000
-      routes:
-        - path: /api/
-          backend: http://127.0.0.1:4000
-
-protection:
-  profile: balanced
-  waf: true
-  bot: true
-  auto_attack_mode: true
-
-updates:
-  auto_security_updates: true
+```bash
+cat > /etc/kiro/kiro-client.env << 'EOF'
+KIRO_CLIENT_LISTEN=:8090
+KIRO_BACKEND_URL=http://127.0.0.1:3000
+KIRO_MASTER_URL=https://firewall.vpsgen.com
+KIRO_LICENSE_KEY=YOUR-LICENSE-KEY
+KIRO_CLIENT_COOKIE_SECRET=RANDOM-SECRET
+KIRO_NODE_ID=my-server
+KIRO_RPM_PER_IP=120
+KIRO_SUBNET_RPM=1800
+KIRO_HARD_BLOCK_AFTER=360
+KIRO_BLOCK_TTL_SECONDS=900
+KIRO_POW_DIFFICULTY=4
+KIRO_HOLD_SECONDS=2
+KIRO_HEARTBEAT_SECONDS=60
+KIRO_UPDATE_SECONDS=300
+KIRO_XDP_BLOCKLIST_FILE=/var/lib/kiro/xdp-blocklist.txt
 EOF
+chmod 600 /etc/kiro/kiro-client.env
 ```
 
-### Bước 3: Preflight Check
+### Start Client
 
 ```bash
-# Kiểm tra trước khi start
-kiro-cli preflight --config /etc/kiro/kiro.yaml
-
-# Kiểm tra output, fix issues nếu có
+sudo systemctl enable --now kiro-client-waf
+systemctl status kiro-client-waf
 ```
 
-### Bước 4: Start Service
+## All-in-One Deployment
+
+Cho trường hợp Master + Client chạy trên cùng 1 VPS:
 
 ```bash
-systemctl enable --now kiro-client-waf
+# Clone project
+git clone https://github.com/vantrong/kiro_waf.git /opt/kiro_waf
+cd /opt/kiro_waf
 
-# Verify
-kiro-cli status --config /etc/kiro/kiro.yaml
-kiro-cli health --config /etc/kiro/kiro.yaml
+# Deploy all-in-one (build + install + configure + start)
+sudo bash scripts/deploy-all-in-one.sh
+```
+
+Hoặc dùng deploy_master.sh (đã bao gồm client):
+
+```bash
+sudo bash scripts/deploy_master.sh
 ```
 
 ## Cloudflare Integration
@@ -233,48 +250,17 @@ kiro-cli health --config /etc/kiro/kiro.yaml
 | `full_tls` | Full | CF→Origin qua HTTPS (self-signed OK) |
 | `full_strict` | Full (Strict) | CF→Origin qua HTTPS (valid cert required) |
 
-### Cloudflare Settings Khuyến nghị
-
-```
-SSL/TLS → Overview: Chọn mode phù hợp
-SSL/TLS → Edge Certificates: Always Use HTTPS = ON
-SSL/TLS → Edge Certificates: Minimum TLS Version = 1.2
-Security → Settings: Security Level = Medium
-Speed → Optimization: Auto Minify = ON (JS, CSS, HTML)
-```
-
-### Block Direct Origin Access
-
-Kiro tự động cấu hình nftables để chỉ cho phép traffic từ Cloudflare IPs:
-
-```bash
-# Kiro tự động update Cloudflare IP ranges
-# File: /etc/kiro/cloudflare-ips-v4.txt
-# File: /etc/kiro/cloudflare-ips-v6.txt
-```
-
-## All-in-One Deployment
-
-Cho trường hợp Master + Client chạy trên cùng 1 VPS:
-
-```bash
-# Deploy all-in-one
-curl -fsSL https://raw.githubusercontent.com/your-repo/kiro_waf/main/scripts/deploy-all-in-one.sh | bash
-```
-
 ## Production Checklist
 
-- [ ] Admin IP đã được cấu hình trong `admin.allow_ips`
+- [ ] Admin IP đã được cấu hình
 - [ ] SSH port đúng trong config
 - [ ] Cloudflare DNS đã proxied (orange cloud)
 - [ ] SSL mode phù hợp giữa Cloudflare và Kiro
-- [ ] `kiro-cli preflight` pass tất cả checks
-- [ ] `kiro-cli health` không có lỗi
-- [ ] Backup config: `cp /etc/kiro/kiro.yaml /etc/kiro/kiro.yaml.bak`
+- [ ] `systemctl status kiro-client-waf` shows active
+- [ ] `curl http://127.0.0.1:8090/healthz` returns OK
+- [ ] Backup config: `cp /etc/kiro/kiro-client.env /etc/kiro/kiro-client.env.bak`
 - [ ] Test truy cập website qua Cloudflare
 - [ ] Test SSH vẫn hoạt động
-- [ ] Cấu hình auto-update (nếu Pro/Enterprise)
-- [ ] Monitoring/alerting đã setup
 
 ## Rollback Plan
 
@@ -282,13 +268,28 @@ Nếu có sự cố sau deploy:
 
 ```bash
 # 1. Rollback binary
-kiro-cli update rollback --binary-path /usr/local/bin/kiro-client --service kiro-client-waf
+kiro-cli update rollback \
+  --binary-path /usr/local/bin/kiro-client-waf \
+  --service kiro-client-waf
 
 # 2. Rollback config
-cp /etc/kiro/kiro.yaml.bak /etc/kiro/kiro.yaml
+cp /etc/kiro/kiro-client.env.bak /etc/kiro/kiro-client.env
 systemctl restart kiro-client-waf
 
-# 3. Emergency: tắt Kiro, traffic đi thẳng
+# 3. Emergency: tắt Kiro
 systemctl stop kiro-client-waf
-# Nginx vẫn chạy với config cũ
+```
+
+## Service Management
+
+```bash
+# Master
+systemctl status kiro-master
+systemctl restart kiro-master
+journalctl -u kiro-master -f
+
+# Client WAF
+systemctl status kiro-client-waf
+systemctl restart kiro-client-waf
+journalctl -u kiro-client-waf -f
 ```

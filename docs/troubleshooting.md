@@ -256,7 +256,7 @@ bot:
 **Rollback ngay:**
 ```bash
 kiro-cli update rollback \
-  --binary-path /usr/local/bin/kiro-client \
+  --binary-path /usr/local/bin/kiro-client-waf \
   --service kiro-client-waf
 ```
 
@@ -272,7 +272,7 @@ df -h /usr/local/bin/
 **Binary incompatible:**
 ```bash
 # Kiểm tra architecture
-file /usr/local/bin/kiro-client
+file /usr/local/bin/kiro-client-waf
 uname -m
 # Phải là x86_64 / amd64
 ```
@@ -417,7 +417,7 @@ journalctl -u kiro-client-waf -n 50 --no-pager
 ls -la /etc/kiro/kiro.yaml
 
 # 2. Binary không có execute permission
-chmod +x /usr/local/bin/kiro-client
+chmod +x /usr/local/bin/kiro-client-waf
 
 # 3. Port đã bị dùng
 ss -tlnp | grep -E ":80|:443"

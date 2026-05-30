@@ -1,14 +1,91 @@
 # Configuration
 
-## Configuration File
+## Overview
 
-File cấu hình chính: `/etc/kiro/kiro.yaml`
+Kiro WAF sử dụng hai loại cấu hình:
 
-Kiro hỗ trợ 2 mức cấu hình:
+1. **Environment variables** — Cấu hình runtime cho binaries (`kiro-master`, `kiro-client-waf`)
+2. **YAML config files** — Cấu hình chi tiết cho kiro-cli và advanced features
+
+## Master Server Environment Variables
+
+File: `/etc/kiro-master/master.env`
+
+| Variable | Default | Required | Mô tả |
+|----------|---------|----------|--------|
+| `KIRO_MASTER_ADDR` | `:8080` | No | Listen address (host:port) |
+| `KIRO_MASTER_DB` | `/var/lib/kiro-master/master.db` | No | SQLite database path |
+| `KIRO_MASTER_ADMIN_KEY` | — | **Yes** | Admin API key (fatal if empty) |
+| `KIRO_MASTER_ADMIN_IPS` | `""` | No | Comma-separated admin IP allowlist |
+| `KIRO_MASTER_SESSION_TTL` | `12h` | No | Admin session TTL (Go duration) |
+
+**Example:**
+```bash
+KIRO_MASTER_ADDR=127.0.0.1:8080
+KIRO_MASTER_DB=/var/lib/kiro-master/master.db
+KIRO_MASTER_ADMIN_KEY=your-secret-admin-key-here
+KIRO_MASTER_ADMIN_IPS=203.0.113.10,198.51.100.5
+KIRO_MASTER_SESSION_TTL=12h
+```
+
+## Client WAF Environment Variables
+
+File: `/etc/kiro/client-waf.env` (hoặc `/etc/kiro/kiro-client.env`)
+
+### Required Variables
+
+| Variable | Default | Mô tả |
+|----------|---------|--------|
+| `KIRO_LICENSE_KEY` | — | License key (fatal if empty) |
+| `KIRO_CLIENT_COOKIE_SECRET` | — | HMAC cookie secret (fatal if empty) |
+| `KIRO_BACKEND_URL` | — | Backend URL to proxy to (fatal if empty) |
+| `KIRO_MASTER_URL` | — | Master server URL for heartbeat/updates (fatal if empty) |
+
+### Optional Variables
+
+| Variable | Default | Mô tả |
+|----------|---------|--------|
+| `KIRO_CLIENT_LISTEN` | `:8090` | Listen address for WAF proxy |
+| `KIRO_NODE_ID` | hostname | Node identifier for heartbeat |
+| `KIRO_POW_DIFFICULTY` | `4` | Proof-of-Work difficulty (number of leading zeros) |
+| `KIRO_HOLD_SECONDS` | `2` | Hold page duration in seconds |
+| `KIRO_RPM_PER_IP` | `120` | Requests per minute per IP (soft threshold) |
+| `KIRO_SUBNET_RPM` | `1800` | Requests per minute per /24 subnet |
+| `KIRO_HARD_BLOCK_AFTER` | `360` | RPM threshold for hard block |
+| `KIRO_BLOCK_TTL_SECONDS` | `900` | Ban duration in seconds (15 min) |
+| `KIRO_XDP_BLOCKLIST_FILE` | `/var/lib/kiro/xdp-blocklist.txt` | XDP blocklist file path |
+| `KIRO_XDP_SYNC_COMMAND` | `""` | Command to sync XDP blocklist |
+| `KIRO_HEARTBEAT_SECONDS` | `60` | Heartbeat interval to master |
+| `KIRO_UPDATE_SECONDS` | `300` | Update check interval (5 min) |
+| `KIRO_ADMIN_IPS` | `""` | Comma-separated admin IPs (bypass lockdown) |
+
+**Example:**
+```bash
+KIRO_CLIENT_LISTEN=:8090
+KIRO_BACKEND_URL=http://127.0.0.1:3000
+KIRO_MASTER_URL=https://firewall.vpsgen.com
+KIRO_LICENSE_KEY=KIRO-XXXX-XXXX
+KIRO_CLIENT_COOKIE_SECRET=random-64-char-secret
+KIRO_NODE_ID=web-server-01
+KIRO_RPM_PER_IP=120
+KIRO_SUBNET_RPM=1800
+KIRO_HARD_BLOCK_AFTER=360
+KIRO_BLOCK_TTL_SECONDS=900
+KIRO_POW_DIFFICULTY=4
+KIRO_HOLD_SECONDS=2
+KIRO_HEARTBEAT_SECONDS=60
+KIRO_UPDATE_SECONDS=300
+KIRO_XDP_BLOCKLIST_FILE=/var/lib/kiro/xdp-blocklist.txt
+KIRO_ADMIN_IPS=203.0.113.10,198.51.100.5
+```
+
+## YAML Configuration File
+
+File: `/etc/kiro/kiro.yaml`
+
+Kiro hỗ trợ 2 mức cấu hình YAML:
 - **Simple** (`kiro.example.yaml`): Đủ cho 80-90% use cases
 - **Advanced** (`kiro.advanced.example.yaml`): Full control cho enterprise
-
-## Simple Configuration Reference
 
 ### Top-level Options
 
@@ -98,15 +175,6 @@ Kiro hỗ trợ 2 mức cấu hình:
 | `safety.keep_last_good_configs` | int | `5` | Số config backup giữ lại |
 | `safety.never_block_admin_ips` | bool | `true` | Không bao giờ block admin IP |
 
-### license
-
-| Key | Type | Default | Mô tả |
-|-----|------|---------|--------|
-| `license.file` | string | `/etc/kiro/license.json` | File license |
-| `license.provider_public_key` | string | `/etc/kiro/provider-public-key.pem` | Public key verify |
-| `license.require_valid_license` | bool | `true` | Yêu cầu license hợp lệ |
-| `license.allow_grace_period` | bool | `true` | Cho phép grace period |
-
 ### server_protection.xdp
 
 | Key | Type | Default | Mô tả |
@@ -161,30 +229,6 @@ Kiro hỗ trợ 2 mức cấu hình:
 | `admission.default_rpm_per_ip` | int | `120` | Default requests/minute per IP |
 | `admission.default_concurrent_per_ip` | int | `10` | Default concurrent requests per IP |
 
-### resource_governor
-
-| Key | Type | Default | Mô tả |
-|-----|------|---------|--------|
-| `resource_governor.enabled` | bool | `true` | Bật resource governor |
-| `resource_governor.baseline.learning_days` | int | `7` | Số ngày học baseline |
-| `resource_governor.hysteresis.cooldown_seconds` | int | `600` | Cooldown trước khi hạ level |
-
-### logging
-
-| Key | Type | Default | Mô tả |
-|-----|------|---------|--------|
-| `logging.level` | string | `info` | Log level: `debug`, `info`, `warn`, `error` |
-| `logging.directory` | string | `/var/log/kiro` | Thư mục log |
-| `logging.rate_limit_per_second` | int | `100` | Max log entries/sec |
-
-## Environment Variables
-
-| Variable | Mô tả |
-|----------|--------|
-| `KIRO_CONFIG` | Path đến config file (override default) |
-| `KIRO_LOG_LEVEL` | Override log level |
-| `KIRO_DRY_RUN` | Force dry-run mode (`true`/`false`) |
-
 ## TLS Modes
 
 | Mode | Mô tả | Khi nào dùng |
@@ -201,6 +245,21 @@ Kiro hỗ trợ 2 mức cấu hình:
 | `balanced` | OWASP CRS | Cookie + JS | 120 RPM | Web app thông thường |
 | `strict` | Full CRS + custom | All challenges | 60 RPM | E-commerce, banking |
 | `lockdown` | Maximum | PoW required | 30 RPM | Đang bị tấn công |
+
+## File Paths Summary
+
+| Path | Purpose |
+|------|---------|
+| `/usr/local/bin/kiro-master` | Master server binary |
+| `/usr/local/bin/kiro-client-waf` | Client WAF binary |
+| `/usr/local/bin/kiro-cli` | CLI tool binary |
+| `/etc/kiro-master/master.env` | Master environment config |
+| `/etc/kiro/client-waf.env` | Client environment config |
+| `/etc/kiro/kiro.yaml` | YAML config (for kiro-cli) |
+| `/var/lib/kiro-master/master.db` | Master SQLite database |
+| `/var/lib/kiro/` | Client state data |
+| `/var/log/kiro/` | Client logs |
+| `/usr/lib/kiro/xdp/xdp_filter.o` | XDP eBPF object |
 
 ## Example Configurations
 

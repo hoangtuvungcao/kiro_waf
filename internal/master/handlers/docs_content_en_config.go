@@ -3,9 +3,46 @@ package handlers
 import "html/template"
 
 var enConfigReference template.HTML = `<h2>Configuration Reference</h2>
-<p>All configuration is stored in <code>/etc/kiro/kiro.yaml</code>. Below is a complete reference of all available options.</p>
+<p>Kiro WAF uses two types of configuration: <strong>environment variables</strong> for the binaries (<code>kiro-master</code>, <code>kiro-client-waf</code>) and <strong>YAML config files</strong> for <code>kiro-cli</code> and advanced features.</p>
 
-<h3>Top-Level Options</h3>
+<h3>Master Server Environment Variables</h3>
+<p>File: <code>/etc/kiro-master/master.env</code></p>
+<table>
+<tr><th>Variable</th><th>Default</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>KIRO_MASTER_ADDR</code></td><td>:8080</td><td>No</td><td>Listen address (host:port)</td></tr>
+<tr><td><code>KIRO_MASTER_DB</code></td><td>/var/lib/kiro-master/master.db</td><td>No</td><td>SQLite database path</td></tr>
+<tr><td><code>KIRO_MASTER_ADMIN_KEY</code></td><td>—</td><td><strong>Yes</strong></td><td>Admin API key (fatal if empty)</td></tr>
+<tr><td><code>KIRO_MASTER_ADMIN_IPS</code></td><td>(empty)</td><td>No</td><td>Comma-separated admin IP allowlist</td></tr>
+<tr><td><code>KIRO_MASTER_SESSION_TTL</code></td><td>12h</td><td>No</td><td>Admin session TTL (Go duration format)</td></tr>
+</table>
+
+<h3>Client WAF Environment Variables</h3>
+<p>File: <code>/etc/kiro/client-waf.env</code></p>
+<table>
+<tr><th>Variable</th><th>Default</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>KIRO_LICENSE_KEY</code></td><td>—</td><td><strong>Yes</strong></td><td>License key (fatal if empty)</td></tr>
+<tr><td><code>KIRO_CLIENT_COOKIE_SECRET</code></td><td>—</td><td><strong>Yes</strong></td><td>HMAC cookie secret (fatal if empty)</td></tr>
+<tr><td><code>KIRO_BACKEND_URL</code></td><td>—</td><td><strong>Yes</strong></td><td>Backend URL to proxy to (fatal if empty)</td></tr>
+<tr><td><code>KIRO_MASTER_URL</code></td><td>—</td><td><strong>Yes</strong></td><td>Master server URL for heartbeat/updates (fatal if empty)</td></tr>
+<tr><td><code>KIRO_CLIENT_LISTEN</code></td><td>:8090</td><td>No</td><td>Listen address for WAF proxy</td></tr>
+<tr><td><code>KIRO_NODE_ID</code></td><td>hostname</td><td>No</td><td>Node identifier for heartbeat</td></tr>
+<tr><td><code>KIRO_POW_DIFFICULTY</code></td><td>4</td><td>No</td><td>Proof-of-Work difficulty (leading zeros)</td></tr>
+<tr><td><code>KIRO_HOLD_SECONDS</code></td><td>2</td><td>No</td><td>Hold page duration in seconds</td></tr>
+<tr><td><code>KIRO_RPM_PER_IP</code></td><td>120</td><td>No</td><td>Requests per minute per IP (soft threshold)</td></tr>
+<tr><td><code>KIRO_SUBNET_RPM</code></td><td>1800</td><td>No</td><td>Requests per minute per /24 subnet</td></tr>
+<tr><td><code>KIRO_HARD_BLOCK_AFTER</code></td><td>360</td><td>No</td><td>RPM threshold for hard block</td></tr>
+<tr><td><code>KIRO_BLOCK_TTL_SECONDS</code></td><td>900</td><td>No</td><td>Ban duration in seconds (15 min)</td></tr>
+<tr><td><code>KIRO_XDP_BLOCKLIST_FILE</code></td><td>/var/lib/kiro/xdp-blocklist.txt</td><td>No</td><td>XDP blocklist file path</td></tr>
+<tr><td><code>KIRO_XDP_SYNC_COMMAND</code></td><td>(empty)</td><td>No</td><td>Command to sync XDP blocklist</td></tr>
+<tr><td><code>KIRO_HEARTBEAT_SECONDS</code></td><td>60</td><td>No</td><td>Heartbeat interval to master</td></tr>
+<tr><td><code>KIRO_UPDATE_SECONDS</code></td><td>300</td><td>No</td><td>Update check interval (5 min)</td></tr>
+<tr><td><code>KIRO_ADMIN_IPS</code></td><td>(empty)</td><td>No</td><td>Comma-separated admin IPs (bypass lockdown)</td></tr>
+</table>
+
+<h3>YAML Configuration (kiro.yaml)</h3>
+<p>The YAML config at <code>/etc/kiro/kiro.yaml</code> is used by <code>kiro-cli</code> commands. Below is a complete reference.</p>
+
+<h4>Top-Level Options</h4>
 <table>
 <tr><th>Option</th><th>Type</th><th>Default</th><th>Range/Values</th><th>Description</th></tr>
 <tr><td><code>mode</code></td><td>string</td><td>full</td><td>server, full</td><td>Operating mode. "server" for firewall only, "full" for firewall + web protection</td></tr>

@@ -8,6 +8,8 @@
 kiro-cli <command> [subcommand] [options]
 ```
 
+**Binary path:** `/usr/local/bin/kiro-cli`
+
 ## Commands
 
 ### version
@@ -98,7 +100,7 @@ kiro-cli status --config /etc/kiro/kiro.yaml
 Kiểm tra sức khỏe toàn diện (status + preflight).
 
 ```bash
-kiro-cli health [--config PATH] [--os-release PATH] [--skip-command-checks]
+kiro-cli health [--config PATH] [--os-release PATH] [--preflight-writable-root PATH] [--skip-command-checks]
 ```
 
 **Parameters:**
@@ -126,7 +128,7 @@ kiro-cli health --config /etc/kiro/kiro.yaml
 Kiểm tra điều kiện tiên quyết trước khi cài đặt/áp dụng.
 
 ```bash
-kiro-cli preflight [--config PATH] [--os-release PATH] [--skip-command-checks]
+kiro-cli preflight [--config PATH] [--os-release PATH] [--preflight-writable-root PATH] [--skip-command-checks]
 ```
 
 **Parameters:**
@@ -200,7 +202,7 @@ Quản lý cài đặt và gỡ cài đặt.
 Hiển thị kế hoạch cài đặt (dry-run).
 
 ```bash
-kiro-cli install plan [--config PATH] [--install-root ROOT] [--agent-binary PATH] [--cli-binary PATH]
+kiro-cli install plan [--config PATH] [--install-root ROOT] [--agent-binary PATH] [--cli-binary PATH] [--provider-binary PATH] [--systemd-service PATH]
 ```
 
 #### install stage-lab
@@ -208,7 +210,7 @@ kiro-cli install plan [--config PATH] [--install-root ROOT] [--agent-binary PATH
 Stage cài đặt vào thư mục lab (không áp dụng thật).
 
 ```bash
-kiro-cli install stage-lab [--config PATH] --install-root ROOT [--agent-binary PATH] [--cli-binary PATH]
+kiro-cli install stage-lab [--config PATH] --install-root ROOT [--agent-binary PATH] [--cli-binary PATH] [--provider-binary PATH] [--systemd-service PATH]
 ```
 
 #### install apply-lab
@@ -216,7 +218,23 @@ kiro-cli install stage-lab [--config PATH] --install-root ROOT [--agent-binary P
 Áp dụng cài đặt (yêu cầu xác nhận).
 
 ```bash
-kiro-cli install apply-lab [--config PATH] --ack KIRO_LAB_INSTALL_APPLY [--install-root ROOT] [--run-steps]
+kiro-cli install apply-lab [--config PATH] --ack KIRO_LAB_INSTALL_APPLY [--install-root ROOT] [--run-steps] [--os-release PATH] [--skip-os-check]
+```
+
+#### install uninstall-plan
+
+Hiển thị kế hoạch gỡ cài đặt.
+
+```bash
+kiro-cli install uninstall-plan [--config PATH] [--install-root ROOT] [--purge]
+```
+
+#### install uninstall-apply-lab
+
+Gỡ cài đặt.
+
+```bash
+kiro-cli install uninstall-apply-lab [--config PATH] --ack KIRO_LAB_UNINSTALL_APPLY [--install-root ROOT] [--purge] [--os-release PATH] [--skip-os-check] [--run-steps]
 ```
 
 **Parameters:**
@@ -228,26 +246,11 @@ kiro-cli install apply-lab [--config PATH] --ack KIRO_LAB_INSTALL_APPLY [--insta
 | `--cli-binary` | string | No | Source binary kiro-cli |
 | `--provider-binary` | string | No | Source binary kiro-provider |
 | `--systemd-service` | string | No | Source systemd service file |
-| `--ack` | string | Yes (apply) | Xác nhận: `KIRO_LAB_INSTALL_APPLY` |
+| `--ack` | string | Yes (apply) | Xác nhận: `KIRO_LAB_INSTALL_APPLY` hoặc `KIRO_LAB_UNINSTALL_APPLY` |
 | `--os-release` | string | No | Path os-release |
 | `--skip-os-check` | bool | No | Bỏ qua Ubuntu check (test only) |
 | `--run-steps` | bool | No | Chạy command steps |
-
-#### install uninstall-plan
-
-Hiển thị kế hoạch gỡ cài đặt.
-
-```bash
-kiro-cli install uninstall-plan [--config PATH] [--purge]
-```
-
-#### install uninstall-apply-lab
-
-Gỡ cài đặt.
-
-```bash
-kiro-cli install uninstall-apply-lab [--config PATH] --ack KIRO_LAB_UNINSTALL_APPLY [--purge]
-```
+| `--purge` | bool | No | Xóa config/state/log (uninstall only) |
 
 **Exit codes:**
 - `0`: Thành công
@@ -273,7 +276,7 @@ kiro-cli update check --master-url URL [--component NAME] [--channel CHANNEL] [-
 Tải và áp dụng cập nhật.
 
 ```bash
-kiro-cli update apply --master-url URL --binary-path PATH --service NAME [--component NAME] [--channel CHANNEL]
+kiro-cli update apply --master-url URL --binary-path PATH --service NAME [--component NAME] [--channel CHANNEL] [--current-version VER]
 ```
 
 #### update rollback
@@ -302,12 +305,12 @@ kiro-cli update check --master-url https://firewall.vpsgen.com
 # Áp dụng update
 kiro-cli update apply \
   --master-url https://firewall.vpsgen.com \
-  --binary-path /usr/local/bin/kiro-client \
+  --binary-path /usr/local/bin/kiro-client-waf \
   --service kiro-client-waf
 
 # Rollback
 kiro-cli update rollback \
-  --binary-path /usr/local/bin/kiro-client \
+  --binary-path /usr/local/bin/kiro-client-waf \
   --service kiro-client-waf
 ```
 
@@ -318,6 +321,25 @@ kiro-cli update rollback \
 
 ---
 
+### report
+
+Tạo system report tổng hợp.
+
+```bash
+kiro-cli report [--config PATH]
+```
+
+**Example:**
+```bash
+kiro-cli report --config /etc/kiro/kiro.yaml | jq .
+```
+
+**Exit codes:**
+- `0`: Thành công
+- `1`: Lỗi
+
+---
+
 ### incident
 
 Tạo báo cáo sự cố.
@@ -325,7 +347,7 @@ Tạo báo cáo sự cố.
 #### incident report
 
 ```bash
-kiro-cli incident report [--config PATH] [--output-dir DIR] [--type TYPE] [--severity SEV] [--summary TEXT]
+kiro-cli incident report [--config PATH] [--output-dir DIR] [--incident-id ID] [--type TYPE] [--severity SEV] [--status STATUS] [--summary TEXT] [--started-at TIME] [--detected-at TIME] [--support-bundle-dir DIR] [--health-file PATH] [--alerts-file PATH]
 ```
 
 **Parameters:**
@@ -340,6 +362,7 @@ kiro-cli incident report [--config PATH] [--output-dir DIR] [--type TYPE] [--sev
 | `--summary` | string | `""` | Tóm tắt sự cố |
 | `--started-at` | string | `""` | Thời gian bắt đầu (RFC3339) |
 | `--detected-at` | string | `""` | Thời gian phát hiện (RFC3339) |
+| `--support-bundle-dir` | string | `""` | Support bundle directory |
 | `--health-file` | string | `""` | Health report JSON |
 | `--alerts-file` | string | `""` | Runtime alerts JSONL |
 
@@ -366,7 +389,7 @@ Tạo báo cáo pilot (thử nghiệm).
 #### pilot report
 
 ```bash
-kiro-cli pilot report [--config PATH] [--output-dir DIR] [--server-count N] [--started-at TIME] [--ended-at TIME]
+kiro-cli pilot report [--config PATH] [--output-dir DIR] [--pilot-id ID] [--server-count N] [--started-at TIME] [--ended-at TIME] [--health-file PATH] [--benchmark-file PATH] [--benchmark-evidence-file PATH] [--incident-dir DIR] [--update-evidence-file PATH] [--revocation-file PATH] [--proxy-evidence-file PATH]
 ```
 
 **Parameters:**
@@ -380,31 +403,16 @@ kiro-cli pilot report [--config PATH] [--output-dir DIR] [--server-count N] [--s
 | `--ended-at` | string | `""` | Thời gian kết thúc (RFC3339) |
 | `--health-file` | string | `""` | Health report evidence |
 | `--benchmark-file` | string | `""` | Benchmark report |
+| `--benchmark-evidence-file` | string | `""` | Benchmark evidence JSON |
 | `--incident-dir` | string | `""` | Incident drill directory |
+| `--update-evidence-file` | string | `""` | Update/rollback drill evidence |
+| `--revocation-file` | string | `""` | Revocation sync evidence |
+| `--proxy-evidence-file` | string | `""` | Proxy/WAF/Bot drill evidence |
 
 **Exit codes:**
 - `0`: Report tạo thành công
 - `1`: Lỗi
 - `2`: Lỗi tham số
-
----
-
-### report
-
-Tạo system report tổng hợp.
-
-```bash
-kiro-cli report [--config PATH]
-```
-
-**Example:**
-```bash
-kiro-cli report --config /etc/kiro/kiro.yaml | jq .
-```
-
-**Exit codes:**
-- `0`: Thành công
-- `1`: Lỗi
 
 ---
 
@@ -434,3 +442,9 @@ kiro-cli <command> --config /etc/kiro/kiro.yaml
 | `0` | Thành công |
 | `1` | Lỗi runtime (config invalid, operation failed) |
 | `2` | Lỗi usage (thiếu tham số, command không hợp lệ) |
+
+### Full Usage Line
+
+```
+kiro-cli version | status | health | preflight | mode show|set | install plan|stage-lab|apply-lab|uninstall-plan|uninstall-apply-lab | update check|apply|rollback | report | incident report | pilot report | license fingerprint [--salt ID]
+```

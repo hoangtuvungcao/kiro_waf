@@ -58,9 +58,9 @@ make build/kiro-cli
 
 ```
 build/
-├── kiro-master      # Master server binary
-├── kiro-client      # Client WAF binary
-├── kiro-cli         # CLI tool binary
+├── kiro-master      # Master server binary → installed as /usr/local/bin/kiro-master
+├── kiro-client      # Client WAF binary → installed as /usr/local/bin/kiro-client-waf
+├── kiro-cli         # CLI tool binary → installed as /usr/local/bin/kiro-cli
 └── xdp_filter.o     # Compiled XDP/eBPF object
 ```
 

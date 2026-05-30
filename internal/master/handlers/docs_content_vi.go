@@ -34,14 +34,17 @@ var viQuickStart template.HTML = `<div class="docs-welcome-card">
 <ul>
 <li>Máy chủ Linux (Ubuntu 20.04+, Debian 11+, CentOS 8+, Rocky 8+, Fedora 36+, hoặc Arch)</li>
 <li>Quyền root hoặc sudo</li>
-<li>License key Kiro WAF hợp lệ</li>
 <li>Kết nối mạng đến máy chủ quản lý Kiro</li>
 </ul>
 
 <h2>Bước 1: Tải và Chạy Script Cài Đặt</h2>
-<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh -o install.sh
-sudo bash install.sh --license-key YOUR-LICENSE-KEY</code></pre>
-<p>Script tự động phát hiện OS, cài đặt dependency, tải binary client, và khởi động service.</p>
+<h3>Community Plan (miễn phí, tự đăng ký)</h3>
+<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash</code></pre>
+<p>Script tự động đăng ký gói Community miễn phí (không cần license key).</p>
+
+<h3>Pro/Enterprise Plan (có license key)</h3>
+<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash -s -- --license-key YOUR-LICENSE-KEY</code></pre>
+<p>Script tự động phát hiện OS, cài đặt dependency, tải binary <code>kiro-client-waf</code>, và khởi động service <code>kiro-client-waf</code>.</p>
 
 <h2>Bước 2: Cấu Hình Website</h2>
 <p>Chỉnh sửa file cấu hình tại <code>/etc/kiro/kiro.yaml</code>:</p>
@@ -93,28 +96,39 @@ var viInstallation template.HTML = `<h2>Hướng Dẫn Cài Đặt</h2>
 
 <h3>Cài Đặt Tự Động</h3>
 <p>Phương pháp cài đặt khuyến nghị sử dụng script tự động:</p>
-<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh -o install.sh
-sudo bash install.sh --license-key YOUR-LICENSE-KEY</code></pre>
+
+<h4>Community Plan (miễn phí)</h4>
+<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash</code></pre>
+<p>Không cần license key — script tự động đăng ký gói Community miễn phí qua <code>POST /api/v1/register</code>.</p>
+
+<h4>Pro/Enterprise Plan</h4>
+<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash -s -- --license-key YOUR-LICENSE-KEY</code></pre>
 
 <h3>Cài Đặt Chế Độ XDP</h3>
 <p>Để lọc gói tin hiệu năng cao với XDP/eBPF:</p>
-<pre><code>sudo bash install.sh --license-key YOUR-LICENSE-KEY --xdp-mode</code></pre>
+<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash -s -- --xdp-mode</code></pre>
 <p>Lệnh này cài thêm dependency build (clang, llvm, libbpf-dev) để biên dịch XDP filter.</p>
 
 <h3>Script Cài Đặt Thực Hiện Gì</h3>
 <ol>
 <li>Phát hiện bản phân phối và phiên bản OS</li>
 <li>Cài đặt dependency cần thiết (curl, sha256sum, systemctl)</li>
-<li>Tải binary Kiro WAF client với xác minh SHA-256</li>
+<li>Tự đăng ký Community license nếu không có <code>--license-key</code> (gọi <code>POST /api/v1/register</code>)</li>
+<li>Tải binary <code>kiro-client-waf</code> với xác minh SHA-256</li>
+<li>Cài đặt tại <code>/usr/local/bin/kiro-client-waf</code></li>
 <li>Tạo thư mục cấu hình tại <code>/etc/kiro/</code></li>
-<li>Cài đặt và kích hoạt systemd service</li>
-<li>Khởi động service Kiro WAF client</li>
+<li>Cài đặt và kích hoạt systemd service <code>kiro-client-waf</code></li>
 </ol>
 
 <h3>Sau Khi Cài Đặt</h3>
-<p>Sau khi cài đặt, cấu hình website trong <code>/etc/kiro/kiro.yaml</code> và khởi động lại service:</p>
+<p>Sau khi cài đặt, cấu hình website trong <code>/etc/kiro/kiro-client.env</code> và khởi động lại service:</p>
 <pre><code>sudo systemctl restart kiro-client-waf
 sudo systemctl status kiro-client-waf</code></pre>
+
+<h3>Cập Nhật</h3>
+<pre><code>kiro-cli update check --master-url https://firewall.vpsgen.com
+kiro-cli update apply --master-url https://firewall.vpsgen.com \
+  --binary-path /usr/local/bin/kiro-client-waf --service kiro-client-waf</code></pre>
 
 <h3>Gỡ Cài Đặt</h3>
 <pre><code>sudo systemctl stop kiro-client-waf

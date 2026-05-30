@@ -21,6 +21,8 @@ Gói Community tự động đăng ký, không cần license key:
 curl -fsSL https://firewall.vpsgen.com/install.sh | bash
 ```
 
+Script sẽ tự động gọi `POST /api/v1/register` trên master server để lấy license key miễn phí.
+
 Tính năng Community:
 - 1 domain
 - Rate limit 60 RPM/IP
@@ -32,7 +34,7 @@ Tính năng Community:
 ### Pro Plan (Có license key)
 
 ```bash
-curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --key KIRO-XXXX-XXXX
+curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --license-key KIRO-XXXX-XXXX
 ```
 
 Tính năng Pro:
@@ -45,7 +47,7 @@ Tính năng Pro:
 ### Enterprise Plan
 
 ```bash
-curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --key KIRO-ENT-XXXX-XXXX
+curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --license-key KIRO-ENT-XXXX-XXXX
 ```
 
 Tính năng Enterprise:
@@ -61,14 +63,14 @@ Tính năng Enterprise:
 # Xem help
 curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --help
 
-# Chỉ định mode
-curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --mode full
-
 # Chỉ định master URL
 curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --master-url https://firewall.vpsgen.com
 
-# Server mode only (không reverse proxy)
-curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --mode server
+# Bật XDP mode (cài thêm clang, llvm, libbpf-dev)
+curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --xdp-mode
+
+# Quiet mode (cho CI/CD, tắt animation và màu sắc)
+curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --quiet
 ```
 
 ## Manual Installation
@@ -77,49 +79,45 @@ curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --mode server
 
 ```bash
 apt update
-apt install -y nginx nftables curl jq
+apt install -y curl coreutils systemd
 ```
 
 ### Bước 2: Tải binary
 
 ```bash
-# Tải từ master server
-curl -fsSL https://firewall.vpsgen.com/download/kiro-client -o /usr/local/bin/kiro-client
-curl -fsSL https://firewall.vpsgen.com/download/kiro-cli -o /usr/local/bin/kiro-cli
-chmod +x /usr/local/bin/kiro-client /usr/local/bin/kiro-cli
+# Tải từ master server (cần license key)
+curl -fsSL -H "X-License-Key: YOUR-KEY" \
+  https://firewall.vpsgen.com/api/v1/download/client-waf \
+  -o /usr/local/bin/kiro-client-waf
+curl -fsSL https://firewall.vpsgen.com/download/kiro-cli \
+  -o /usr/local/bin/kiro-cli
+chmod +x /usr/local/bin/kiro-client-waf /usr/local/bin/kiro-cli
 ```
 
 ### Bước 3: Tạo cấu hình
 
 ```bash
-mkdir -p /etc/kiro
-cat > /etc/kiro/kiro.yaml << 'EOF'
-mode: full
-plan: community
-license_key: ""
+mkdir -p /etc/kiro /var/lib/kiro /var/log/kiro
 
-admin:
-  allow_ips:
-    - YOUR_ADMIN_IP/32
-
-server:
-  interface: eth0
-  ssh_port: 22
-
-website:
-  enabled: true
-  cloudflare: true
-  tls_mode: flexible_http
-  sites:
-    - domains:
-        - yourdomain.com
-      backend: http://127.0.0.1:3000
-
-protection:
-  profile: balanced
-  waf: true
-  bot: true
+cat > /etc/kiro/kiro-client.env << 'EOF'
+KIRO_CLIENT_LISTEN=:8090
+KIRO_BACKEND_URL=http://127.0.0.1:3000
+KIRO_MASTER_URL=https://firewall.vpsgen.com
+KIRO_LICENSE_KEY=YOUR-LICENSE-KEY
+KIRO_CLIENT_COOKIE_SECRET=CHANGE-ME-RANDOM-SECRET
+KIRO_NODE_ID=my-server
+KIRO_RPM_PER_IP=120
+KIRO_SUBNET_RPM=1800
+KIRO_HARD_BLOCK_AFTER=360
+KIRO_BLOCK_TTL_SECONDS=900
+KIRO_POW_DIFFICULTY=4
+KIRO_HOLD_SECONDS=2
+KIRO_HEARTBEAT_SECONDS=60
+KIRO_UPDATE_SECONDS=300
+KIRO_XDP_BLOCKLIST_FILE=/var/lib/kiro/xdp-blocklist.txt
 EOF
+
+chmod 600 /etc/kiro/kiro-client.env
 ```
 
 ### Bước 4: Cài đặt systemd service
@@ -127,16 +125,19 @@ EOF
 ```bash
 cat > /etc/systemd/system/kiro-client-waf.service << 'EOF'
 [Unit]
-Description=Kiro WAF Client
-After=network-online.target nginx.service
+Description=Kiro Client WAF - Reverse proxy, challenge pages, rate limiting, and XDP sync
+Documentation=https://firewall.vpsgen.com
+After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/kiro-client --config /etc/kiro/kiro.yaml
+ExecStart=/usr/local/bin/kiro-client-waf
+EnvironmentFile=/etc/kiro/kiro-client.env
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65535
+WorkingDirectory=/var/lib/kiro
 
 [Install]
 WantedBy=multi-user.target
@@ -149,7 +150,13 @@ systemctl enable --now kiro-client-waf
 ### Bước 5: Kiểm tra
 
 ```bash
-# Kiểm tra trạng thái
+# Kiểm tra trạng thái service
+systemctl status kiro-client-waf
+
+# Kiểm tra health endpoint
+curl -s http://127.0.0.1:8090/healthz
+
+# Kiểm tra trạng thái (cần config YAML)
 kiro-cli status --config /etc/kiro/kiro.yaml
 
 # Kiểm tra health
@@ -161,28 +168,7 @@ kiro-cli preflight --config /etc/kiro/kiro.yaml
 
 ## Post-Installation
 
-### Cấu hình Nginx
-
-Kiro tự động tạo config Nginx tại `/etc/nginx/sites-available/kiro-waf.conf`. Kiểm tra:
-
-```bash
-nginx -t
-systemctl reload nginx
-```
-
-### Cấu hình nftables
-
-Áp dụng rules:
-
-```bash
-# Xem rules sẽ được áp dụng
-kiro-cli install plan --config /etc/kiro/kiro.yaml
-
-# Áp dụng
-nft -f /etc/kiro/nftables/kiro-full-mode.nft
-```
-
-### Cấu hình Cloudflare
+### Cấu hình Cloudflare (nếu dùng)
 
 1. Trỏ DNS domain về IP server (Proxied - orange cloud)
 2. SSL/TLS mode: Flexible (nếu dùng `flexible_http`) hoặc Full Strict
@@ -197,12 +183,12 @@ kiro-cli update check --master-url https://firewall.vpsgen.com
 # Áp dụng cập nhật
 kiro-cli update apply \
   --master-url https://firewall.vpsgen.com \
-  --binary-path /usr/local/bin/kiro-client \
+  --binary-path /usr/local/bin/kiro-client-waf \
   --service kiro-client-waf
 
 # Rollback nếu có lỗi
 kiro-cli update rollback \
-  --binary-path /usr/local/bin/kiro-client \
+  --binary-path /usr/local/bin/kiro-client-waf \
   --service kiro-client-waf
 ```
 

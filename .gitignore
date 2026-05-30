@@ -1,9 +1,10 @@
 # Build outputs
 /kiro-agent
 /kiro-cli
+/kiro-client
+/kiro-client-waf
 /kiro-provider
 /kiro-master
-/kiro-client-waf
 /bin/
 /dist/
 /build/

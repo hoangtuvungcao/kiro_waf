@@ -34,14 +34,17 @@ var enQuickStart template.HTML = `<div class="docs-welcome-card">
 <ul>
 <li>A Linux server (Ubuntu 20.04+, Debian 11+, CentOS 8+, Rocky 8+, Fedora 36+, or Arch)</li>
 <li>Root or sudo access</li>
-<li>A valid Kiro WAF license key</li>
 <li>Network connectivity to the Kiro management server</li>
 </ul>
 
 <h2>Step 1: Download and Run the Installer</h2>
-<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh -o install.sh
-sudo bash install.sh --license-key YOUR-LICENSE-KEY</code></pre>
-<p>The installer automatically detects your OS, installs dependencies, downloads the client binary, and starts the service.</p>
+<h3>Community Plan (free, auto-registers)</h3>
+<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash</code></pre>
+<p>No license key needed — the script auto-registers a free Community plan via <code>POST /api/v1/register</code>.</p>
+
+<h3>Pro/Enterprise Plan (with license key)</h3>
+<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash -s -- --license-key YOUR-LICENSE-KEY</code></pre>
+<p>The installer automatically detects your OS, installs dependencies, downloads the <code>kiro-client-waf</code> binary, and starts the <code>kiro-client-waf</code> service.</p>
 
 <h2>Step 2: Configure Your Site</h2>
 <p>Edit the configuration file at <code>/etc/kiro/kiro.yaml</code>:</p>
@@ -93,28 +96,39 @@ var enInstallation template.HTML = `<h2>Installation Guide</h2>
 
 <h3>Automatic Installation</h3>
 <p>The recommended installation method uses the automated install script:</p>
-<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh -o install.sh
-sudo bash install.sh --license-key YOUR-LICENSE-KEY</code></pre>
+
+<h4>Community Plan (free)</h4>
+<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash</code></pre>
+<p>No license key needed — the script auto-registers a free Community plan via <code>POST /api/v1/register</code>.</p>
+
+<h4>Pro/Enterprise Plan</h4>
+<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash -s -- --license-key YOUR-LICENSE-KEY</code></pre>
 
 <h3>XDP Mode Installation</h3>
 <p>For high-performance packet filtering with XDP/eBPF support:</p>
-<pre><code>sudo bash install.sh --license-key YOUR-LICENSE-KEY --xdp-mode</code></pre>
+<pre><code>curl -fsSL https://firewall.vpsgen.com/install.sh | sudo bash -s -- --xdp-mode</code></pre>
 <p>This installs additional build dependencies (clang, llvm, libbpf-dev) for XDP filter compilation.</p>
 
 <h3>What the Installer Does</h3>
 <ol>
 <li>Detects your OS distribution and version</li>
 <li>Installs required dependencies (curl, sha256sum, systemctl)</li>
-<li>Downloads the Kiro WAF client binary with SHA-256 verification</li>
+<li>Auto-registers Community license if no <code>--license-key</code> provided (calls <code>POST /api/v1/register</code>)</li>
+<li>Downloads the <code>kiro-client-waf</code> binary with SHA-256 verification</li>
+<li>Installs to <code>/usr/local/bin/kiro-client-waf</code></li>
 <li>Creates the configuration directory at <code>/etc/kiro/</code></li>
-<li>Installs and enables the systemd service</li>
-<li>Starts the Kiro WAF client service</li>
+<li>Installs and enables the <code>kiro-client-waf</code> systemd service</li>
 </ol>
 
 <h3>Post-Installation</h3>
-<p>After installation, configure your site in <code>/etc/kiro/kiro.yaml</code> and restart the service:</p>
+<p>After installation, configure your environment in <code>/etc/kiro/kiro-client.env</code> and restart the service:</p>
 <pre><code>sudo systemctl restart kiro-client-waf
 sudo systemctl status kiro-client-waf</code></pre>
+
+<h3>Update</h3>
+<pre><code>kiro-cli update check --master-url https://firewall.vpsgen.com
+kiro-cli update apply --master-url https://firewall.vpsgen.com \
+  --binary-path /usr/local/bin/kiro-client-waf --service kiro-client-waf</code></pre>
 
 <h3>Uninstallation</h3>
 <pre><code>sudo systemctl stop kiro-client-waf

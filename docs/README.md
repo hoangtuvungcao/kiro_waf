@@ -43,7 +43,7 @@ graph TB
 curl -fsSL https://firewall.vpsgen.com/install.sh | bash
 
 # Pro/Enterprise plan (cần license key)
-curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --key KIRO-XXXX-XXXX
+curl -fsSL https://firewall.vpsgen.com/install.sh | bash -s -- --license-key KIRO-XXXX-XXXX
 ```
 
 ## System Requirements
