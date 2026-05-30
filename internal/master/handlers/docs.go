@@ -259,7 +259,6 @@ func (h *DocsHandler) getSections(lang string) []DocsSection {
 				Items: []DocsSectionItem{
 					{ID: "quick-start", Title: "Quick Start", Path: "/docs/en/quick-start"},
 					{ID: "installation", Title: "Installation", Path: "/docs/en/installation"},
-					{ID: "requirements", Title: "System Requirements", Path: "/docs/en/requirements"},
 				},
 			},
 			{
@@ -267,8 +266,6 @@ func (h *DocsHandler) getSections(lang string) []DocsSection {
 				Title: "Configuration",
 				Items: []DocsSectionItem{
 					{ID: "config-reference", Title: "Configuration Reference", Path: "/docs/en/config-reference"},
-					{ID: "yaml-options", Title: "YAML Options", Path: "/docs/en/yaml-options"},
-					{ID: "advanced-config", Title: "Advanced Configuration", Path: "/docs/en/advanced-config"},
 				},
 			},
 			{
@@ -293,9 +290,7 @@ func (h *DocsHandler) getSections(lang string) []DocsSection {
 				ID:    "operation",
 				Title: "Operation",
 				Items: []DocsSectionItem{
-					{ID: "monitoring", Title: "Monitoring", Path: "/docs/en/monitoring"},
-					{ID: "updates", Title: "Updates & OTA", Path: "/docs/en/updates"},
-					{ID: "backup", Title: "Backup & Recovery", Path: "/docs/en/backup"},
+					{ID: "cli-commands", Title: "CLI Commands", Path: "/docs/en/cli-commands"},
 				},
 			},
 			{
@@ -317,7 +312,6 @@ func (h *DocsHandler) getSections(lang string) []DocsSection {
 			Items: []DocsSectionItem{
 				{ID: "quick-start", Title: "Bắt Đầu Nhanh", Path: "/docs/vi/quick-start"},
 				{ID: "installation", Title: "Cài Đặt", Path: "/docs/vi/installation"},
-				{ID: "requirements", Title: "Yêu Cầu Hệ Thống", Path: "/docs/vi/requirements"},
 			},
 		},
 		{
@@ -325,8 +319,6 @@ func (h *DocsHandler) getSections(lang string) []DocsSection {
 			Title: "Cấu Hình",
 			Items: []DocsSectionItem{
 				{ID: "config-reference", Title: "Tham Chiếu Cấu Hình", Path: "/docs/vi/config-reference"},
-				{ID: "yaml-options", Title: "Tùy Chọn YAML", Path: "/docs/vi/yaml-options"},
-				{ID: "advanced-config", Title: "Cấu Hình Nâng Cao", Path: "/docs/vi/advanced-config"},
 			},
 		},
 		{
@@ -351,9 +343,7 @@ func (h *DocsHandler) getSections(lang string) []DocsSection {
 			ID:    "operation",
 			Title: "Vận Hành",
 			Items: []DocsSectionItem{
-				{ID: "monitoring", Title: "Giám Sát", Path: "/docs/vi/monitoring"},
-				{ID: "updates", Title: "Cập Nhật & OTA", Path: "/docs/vi/updates"},
-				{ID: "backup", Title: "Sao Lưu & Khôi Phục", Path: "/docs/vi/backup"},
+				{ID: "cli-commands", Title: "Lệnh CLI", Path: "/docs/vi/cli-commands"},
 			},
 		},
 		{
