@@ -155,12 +155,8 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if IP exceeded soft threshold → force challenge even with valid cookie
-	if h.rateLimiter != nil && !h.rateLimiter.Allow(ip) {
-		h.serveChallengeForLevel(w, r, ip)
-		return
-	}
-
+	// Check valid cookie first — if user already solved a challenge, let them through
+	// (unless hard blocked above). Rate limiting still counts their requests.
 	if cookieValue, valid := h.hasValidCookieV2(r, ip); valid {
 		if h.cookieLimiter != nil && cookieValue != "" {
 			if !h.cookieLimiter.RecordAndCheck(cookieValue) {
@@ -173,6 +169,8 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// No valid cookie — check rate limit to determine challenge level
+	// If over soft threshold, serve harder challenge (PoW/Hold instead of transparent)
 	h.serveChallengeForLevel(w, r, ip)
 }
 
