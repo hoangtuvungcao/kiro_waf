@@ -118,6 +118,22 @@ func (s *SlidingWindowLimiter) IsHardBlocked(ip string) bool {
 	return len(state.requests) >= s.config.HardThreshold
 }
 
+// IsDoubleThreshold kiểm tra xem IP có vượt 2x soft threshold hay không.
+// Dùng để trigger Hold captcha (level 3) trước khi đạt hard threshold.
+func (s *SlidingWindowLimiter) IsDoubleThreshold(ip string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := s.nowFunc()
+	state, exists := s.ipMap[ip]
+	if !exists {
+		return false
+	}
+	s.pruneIPState(state, now)
+
+	return len(state.requests) >= s.config.SoftThreshold*2
+}
+
 // GetSubnet24 trả về subnet /24 string cho một IP address.
 // Ví dụ: "192.168.1.100" → "192.168.1.0/24"
 func (s *SlidingWindowLimiter) GetSubnet24(ip string) string {

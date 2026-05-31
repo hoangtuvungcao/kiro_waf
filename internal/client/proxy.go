@@ -369,12 +369,10 @@ func (h *ProxyHandler) getEscalationLevel(ip string) int {
 	if h.rateLimiter != nil {
 		if h.rateLimiter.IsHardBlocked(ip) {
 			rateLimitLevel = 4
+		} else if h.rateLimiter.IsDoubleThreshold(ip) {
+			rateLimitLevel = 3 // Hold captcha for 2x soft threshold
 		} else if !h.rateLimiter.Allow(ip) {
 			rateLimitLevel = 2 // PoW challenge for soft threshold
-			subnet := h.rateLimiter.GetSubnet24(ip)
-			if !h.rateLimiter.AllowSubnet(subnet) {
-				rateLimitLevel = 3 // Hold for subnet threshold
-			}
 		}
 	}
 
