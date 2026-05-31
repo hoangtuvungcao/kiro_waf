@@ -122,29 +122,7 @@ func NewProxyHandler(
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ip := h.extractClientIP(r)
 
-	// Bypass WAF for static assets and health check only
-	if isPassthroughPath(r.URL.Path) {
-		h.reverseProxy.ServeHTTP(w, r)
-		return
-	}
-
-	// Machine API calls with license key header bypass challenge (but still rate limited)
-	// This allows heartbeat, download, register endpoints to work without browser
-	if r.Header.Get("X-License-Key") != "" || r.Header.Get("X-Api-Key") != "" {
-		if h.rateLimiter != nil {
-			h.rateLimiter.RecordRequest(ip)
-		}
-		if h.rateLimiter != nil && h.rateLimiter.IsHardBlocked(ip) {
-			if h.banEngine != nil {
-				h.banEngine.Ban(ip, h.banDuration, "api_hard_block")
-			}
-			http.Error(w, `{"error":"rate limited"}`, http.StatusTooManyRequests)
-			return
-		}
-		h.reverseProxy.ServeHTTP(w, r)
-		return
-	}
-
+	// Challenge verify endpoints — must be accessible without challenge
 	if r.URL.Path == "/__kiro/challenge/verify" {
 		h.handleChallengeVerify(w, r, ip)
 		return
@@ -158,6 +136,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ALL other paths go through WAF protection (no exceptions)
 	if ua.IsAutomationUA(r.UserAgent()) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -445,16 +424,5 @@ func (h *ProxyHandler) hasValidCookie(r *http.Request, ip string) bool {
 	return valid
 }
 
-// isPassthroughPath returns true for paths that should bypass WAF challenge.
-// Only static assets and health check bypass — everything else is protected.
-func isPassthroughPath(path string) bool {
-	switch {
-	case path == "/healthz":
-		return true
-	case len(path) >= 8 && path[:8] == "/static/":
-		return true
-	case path == "/install" || path == "/install.sh":
-		return true
-	}
-	return false
-}
+// All paths are protected by WAF — no passthrough exceptions.
+// Only /__kiro/* challenge endpoints and /healthz (handled by mux) bypass.

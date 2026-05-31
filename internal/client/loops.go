@@ -157,6 +157,8 @@ func sendHeartbeat(client *http.Client, config HeartbeatConfig, lockdown *Lockdo
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "KiroWAF-Heartbeat/1.0")
+	req.Header.Set("X-License-Key", config.LicenseKey)
 
 	resp, err := client.Do(req)
 	if err != nil {
