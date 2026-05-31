@@ -539,17 +539,17 @@
         <div class="hp-step">
             <div class="hp-step-num">1</div>
             <h4>Cài đặt</h4>
-            <p>Chạy script cài đặt trên VPS. Tự động tải binary, cấu hình nginx, và kích hoạt dịch vụ.</p>
+            <p>Chạy script cài đặt trên VPS. Tự động tải binary, cài XDP filter, tạo cấu hình và kích hoạt dịch vụ.</p>
         </div>
         <div class="hp-step">
             <div class="hp-step-num">2</div>
-            <h4>Cấu hình domain</h4>
-            <p>Thêm domain vào file cấu hình. Chọn chế độ bảo vệ phù hợp: server-only hoặc full mode.</p>
+            <h4>Cấu hình</h4>
+            <p>Chỉnh sửa /etc/kiro/kiro.yaml — thêm domain, backend URL, chọn protection profile.</p>
         </div>
         <div class="hp-step">
             <div class="hp-step-num">3</div>
             <h4>Hoạt động</h4>
-            <p>Hệ thống tự động bảo vệ. Theo dõi trạng thái qua CLI hoặc dashboard quản trị.</p>
+            <p>Hệ thống tự động bảo vệ L4 (XDP) + L7 (WAF). Theo dõi qua CLI hoặc dashboard.</p>
         </div>
     </div>
 </section>

@@ -27,9 +27,8 @@ Script tạo file cấu hình YAML tại `/etc/kiro/kiro.yaml` với các giá t
 Tính năng Community:
 - 1 domain
 - Rate limit 60 RPM/IP
-- WAF + Bot detection cơ bản
+- WAF + Bot detection + XDP L4 protection
 - Không giới hạn bandwidth
-- Không có XDP filter
 - Cập nhật thủ công
 
 ### Pro Plan (Có license key)
