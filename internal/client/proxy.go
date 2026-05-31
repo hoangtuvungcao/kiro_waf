@@ -146,12 +146,18 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.rateLimiter.RecordRequest(ip)
 	}
 
-	// Check if IP hit hard block threshold → ban immediately
+	// Check if IP hit hard block threshold → ban immediately (even with valid cookie)
 	if h.rateLimiter != nil && h.rateLimiter.IsHardBlocked(ip) {
 		if h.banEngine != nil {
 			h.banEngine.Ban(ip, h.banDuration, "rate_limit_hard_block")
 		}
 		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Check if IP exceeded soft threshold → force challenge even with valid cookie
+	if h.rateLimiter != nil && !h.rateLimiter.Allow(ip) {
+		h.serveChallengeForLevel(w, r, ip)
 		return
 	}
 
