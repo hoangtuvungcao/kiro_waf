@@ -158,8 +158,8 @@ var viCLICommands template.HTML = `<h2>Lệnh CLI (kiro-cli)</h2>
 
 <h3>Sử Dụng Nhanh</h3>
 <pre><code>kiro-cli version
-kiro-cli status --config /etc/kiro/kiro.yaml
-kiro-cli health --config /etc/kiro/kiro.yaml
+kiro-cli status
+kiro-cli health
 kiro-cli update check --master-url https://firewall.vpsgen.com</code></pre>
 
 <h3>Mã Thoát Chung</h3>
@@ -214,10 +214,10 @@ var viCLIOverview template.HTML = `<div class="docs-welcome-card">
 kiro-cli version
 
 # Xem trạng thái hệ thống
-kiro-cli status --config /etc/kiro/kiro.yaml
+kiro-cli status
 
 # Kiểm tra sức khỏe
-kiro-cli health --config /etc/kiro/kiro.yaml
+kiro-cli health
 
 # Kiểm tra cập nhật
 kiro-cli update check --master-url https://firewall.vpsgen.com</code></pre>
@@ -309,12 +309,12 @@ var viCLIStatus template.HTML = `<h2>kiro-cli status</h2>
 <p>Hiển thị trạng thái runtime hiện tại của hệ thống Kiro WAF dưới dạng JSON.</p>
 
 <h3>Cú Pháp</h3>
-<pre><code>kiro-cli status --config &lt;path&gt;</code></pre>
+<pre><code>kiro-cli status [--config &lt;path&gt;]</code></pre>
 
 <h3>Tham Số</h3>
 <table>
 <tr><th>Tham Số</th><th>Bắt Buộc</th><th>Kiểu</th><th>Mặc Định</th><th>Mô Tả</th></tr>
-<tr><td><code>--config</code></td><td>Có</td><td>string</td><td>/etc/kiro/kiro.yaml</td><td>Đường dẫn file cấu hình YAML</td></tr>
+<tr><td><code>--config</code></td><td>Không</td><td>string</td><td>/etc/kiro/kiro.yaml</td><td>Đường dẫn file cấu hình YAML (mặc định: /etc/kiro/kiro.yaml)</td></tr>
 </table>
 
 <h3>Output JSON</h3>
@@ -328,7 +328,7 @@ var viCLIStatus template.HTML = `<h2>kiro-cli status</h2>
 </table>
 
 <h3>Ví Dụ</h3>
-<pre><code>$ kiro-cli status --config /etc/kiro/kiro.yaml
+<pre><code>$ kiro-cli status
 {
   "mode": "full",
   "uptime": "48h12m",
@@ -349,7 +349,7 @@ var viCLIStatus template.HTML = `<h2>kiro-cli status</h2>
 <tr><th>Mã</th><th>Ý Nghĩa</th></tr>
 <tr><td>0</td><td>Thành công — trạng thái được hiển thị</td></tr>
 <tr><td>1</td><td>Lỗi — không thể đọc cấu hình hoặc truy vấn trạng thái</td></tr>
-<tr><td>2</td><td>Thiếu tham số --config</td></tr>
+<tr><td>2</td><td>Lỗi đọc cấu hình</td></tr>
 </table>
 
 <h3>Liên Quan</h3>
@@ -363,12 +363,12 @@ var viCLIHealth template.HTML = `<h2>kiro-cli health</h2>
 <p>Kiểm tra sức khỏe tổng hợp của hệ thống bao gồm service status, preflight checks, và overall health.</p>
 
 <h3>Cú Pháp</h3>
-<pre><code>kiro-cli health --config &lt;path&gt; [--os-release &lt;path&gt;] [--preflight-writable-root &lt;path&gt;] [--skip-command-checks]</code></pre>
+<pre><code>kiro-cli health [--config &lt;path&gt;] [--os-release &lt;path&gt;] [--preflight-writable-root &lt;path&gt;] [--skip-command-checks]</code></pre>
 
 <h3>Tham Số</h3>
 <table>
 <tr><th>Tham Số</th><th>Bắt Buộc</th><th>Kiểu</th><th>Mặc Định</th><th>Mô Tả</th></tr>
-<tr><td><code>--config</code></td><td>Có</td><td>string</td><td>/etc/kiro/kiro.yaml</td><td>Đường dẫn file cấu hình</td></tr>
+<tr><td><code>--config</code></td><td>Không</td><td>string</td><td>/etc/kiro/kiro.yaml</td><td>Đường dẫn file cấu hình (mặc định: /etc/kiro/kiro.yaml)</td></tr>
 <tr><td><code>--os-release</code></td><td>Không</td><td>string</td><td>/etc/os-release</td><td>Đường dẫn file os-release (cho testing)</td></tr>
 <tr><td><code>--preflight-writable-root</code></td><td>Không</td><td>string</td><td>/</td><td>Thư mục gốc cho kiểm tra writable (cho testing)</td></tr>
 <tr><td><code>--skip-command-checks</code></td><td>Không</td><td>bool</td><td>false</td><td>Bỏ qua kiểm tra command availability</td></tr>
@@ -383,7 +383,7 @@ var viCLIHealth template.HTML = `<h2>kiro-cli health</h2>
 </table>
 
 <h3>Ví Dụ</h3>
-<pre><code>$ kiro-cli health --config /etc/kiro/kiro.yaml
+<pre><code>$ kiro-cli health
 {
   "overall_status": "healthy",
   "service_status": "active",
@@ -404,7 +404,7 @@ var viCLIHealth template.HTML = `<h2>kiro-cli health</h2>
 <tr><th>Mã</th><th>Ý Nghĩa</th></tr>
 <tr><td>0</td><td>Thành công — kết quả health check được hiển thị (bất kể overall_status)</td></tr>
 <tr><td>1</td><td>Lỗi — không thể thực hiện health check</td></tr>
-<tr><td>2</td><td>Thiếu tham số bắt buộc</td></tr>
+<tr><td>2</td><td>Lỗi đọc cấu hình</td></tr>
 </table>
 
 <h3>Liên Quan</h3>
@@ -418,12 +418,12 @@ var viCLIPreflight template.HTML = `<h2>kiro-cli preflight</h2>
 <p>Kiểm tra điều kiện tiên quyết trước khi triển khai: OS compatibility, quyền root, và command availability.</p>
 
 <h3>Cú Pháp</h3>
-<pre><code>kiro-cli preflight --config &lt;path&gt; [--os-release &lt;path&gt;] [--preflight-writable-root &lt;path&gt;] [--skip-command-checks]</code></pre>
+<pre><code>kiro-cli preflight [--config &lt;path&gt;] [--os-release &lt;path&gt;] [--preflight-writable-root &lt;path&gt;] [--skip-command-checks]</code></pre>
 
 <h3>Tham Số</h3>
 <table>
 <tr><th>Tham Số</th><th>Bắt Buộc</th><th>Kiểu</th><th>Mặc Định</th><th>Mô Tả</th></tr>
-<tr><td><code>--config</code></td><td>Có</td><td>string</td><td>/etc/kiro/kiro.yaml</td><td>Đường dẫn file cấu hình</td></tr>
+<tr><td><code>--config</code></td><td>Không</td><td>string</td><td>/etc/kiro/kiro.yaml</td><td>Đường dẫn file cấu hình (mặc định: /etc/kiro/kiro.yaml)</td></tr>
 <tr><td><code>--os-release</code></td><td>Không</td><td>string</td><td>/etc/os-release</td><td>Đường dẫn file os-release</td></tr>
 <tr><td><code>--preflight-writable-root</code></td><td>Không</td><td>string</td><td>/</td><td>Thư mục gốc cho kiểm tra writable</td></tr>
 <tr><td><code>--skip-command-checks</code></td><td>Không</td><td>bool</td><td>false</td><td>Bỏ qua kiểm tra command availability</td></tr>
@@ -438,7 +438,7 @@ var viCLIPreflight template.HTML = `<h2>kiro-cli preflight</h2>
 </table>
 
 <h3>Ví Dụ</h3>
-<pre><code>$ sudo kiro-cli preflight --config /etc/kiro/kiro.yaml
+<pre><code>$ sudo kiro-cli preflight
 {
   "os_compatible": true,
   "os_id": "ubuntu",
@@ -460,7 +460,7 @@ var viCLIPreflight template.HTML = `<h2>kiro-cli preflight</h2>
 <tr><th>Mã</th><th>Ý Nghĩa</th></tr>
 <tr><td>0</td><td>Thành công — kết quả preflight được hiển thị</td></tr>
 <tr><td>1</td><td>Lỗi — không thể thực hiện kiểm tra</td></tr>
-<tr><td>2</td><td>Thiếu tham số bắt buộc</td></tr>
+<tr><td>2</td><td>Lỗi đọc cấu hình</td></tr>
 </table>
 
 <h3>Liên Quan</h3>
@@ -784,12 +784,12 @@ var viCLIReport template.HTML = `<h2>kiro-cli report</h2>
 <p>Tạo báo cáo tổng hợp hệ thống bao gồm thông tin phiên bản, cấu hình runtime, và trạng thái các thành phần.</p>
 
 <h3>Cú Pháp</h3>
-<pre><code>kiro-cli report --config &lt;path&gt;</code></pre>
+<pre><code>kiro-cli report [--config &lt;path&gt;]</code></pre>
 
 <h3>Tham Số</h3>
 <table>
 <tr><th>Tham Số</th><th>Bắt Buộc</th><th>Kiểu</th><th>Mặc Định</th><th>Mô Tả</th></tr>
-<tr><td><code>--config</code></td><td>Có</td><td>string</td><td>/etc/kiro/kiro.yaml</td><td>Đường dẫn file cấu hình</td></tr>
+<tr><td><code>--config</code></td><td>Không</td><td>string</td><td>/etc/kiro/kiro.yaml</td><td>Đường dẫn file cấu hình (mặc định: /etc/kiro/kiro.yaml)</td></tr>
 </table>
 
 <h3>Output JSON</h3>
@@ -807,7 +807,7 @@ var viCLIReport template.HTML = `<h2>kiro-cli report</h2>
 </table>
 
 <h3>Ví Dụ</h3>
-<pre><code>$ kiro-cli report --config /etc/kiro/kiro.yaml
+<pre><code>$ kiro-cli report
 {
   "version": "1.0.0",
   "go_version": "go1.22.0",
@@ -830,7 +830,7 @@ var viCLIReport template.HTML = `<h2>kiro-cli report</h2>
 <tr><th>Mã</th><th>Ý Nghĩa</th></tr>
 <tr><td>0</td><td>Thành công — báo cáo được hiển thị</td></tr>
 <tr><td>1</td><td>Lỗi — không thể đọc cấu hình hoặc thu thập thông tin</td></tr>
-<tr><td>2</td><td>Thiếu tham số --config</td></tr>
+<tr><td>2</td><td>Lỗi đọc cấu hình</td></tr>
 </table>
 
 <h3>Liên Quan</h3>
