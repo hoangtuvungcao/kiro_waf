@@ -85,6 +85,17 @@ func NewProxyHandler(
 
 	backendTarget, _ := url.Parse(config.BackendURL)
 	rp := httputil.NewSingleHostReverseProxy(backendTarget)
+
+	// Optimized transport: connection pooling + keep-alive for high throughput
+	rp.Transport = &http.Transport{
+		MaxIdleConns:        200,
+		MaxIdleConnsPerHost: 100,
+		MaxConnsPerHost:     0, // unlimited
+		IdleConnTimeout:     90 * time.Second,
+		DisableCompression:  true, // backend handles compression
+		ForceAttemptHTTP2:   true, // HTTP/2 to backend if supported
+	}
+
 	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		ServeBranded502(w)
 	}
