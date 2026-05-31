@@ -195,6 +195,14 @@ func (s *SlidingWindowLimiter) GetThresholds() (soft, hard, subnet int) {
 	return s.config.SoftThreshold, s.config.HardThreshold, s.config.SubnetThreshold
 }
 
+// ResetIP clears the rate limit counter for a specific IP.
+// Called after a successful challenge verification to allow the user to browse normally.
+func (s *SlidingWindowLimiter) ResetIP(ip string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.ipMap, ip)
+}
+
 // getOrCreateIPState lấy hoặc tạo mới ipState cho IP.
 // Caller phải giữ lock.
 func (s *SlidingWindowLimiter) getOrCreateIPState(ip string) *ipState {

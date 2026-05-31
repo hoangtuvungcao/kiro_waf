@@ -155,8 +155,15 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check valid cookie first — if user already solved a challenge, let them through
-	// (unless hard blocked above). Rate limiting still counts their requests.
+	// Check if IP exceeded soft threshold → force challenge even with valid cookie
+	// This is critical: prevents cookie holders from flooding indefinitely
+	if h.rateLimiter != nil && !h.rateLimiter.Allow(ip) {
+		// Invalidate cookie by not checking it — force re-challenge
+		h.serveChallengeForLevel(w, r, ip)
+		return
+	}
+
+	// Under rate limit — check cookie
 	if cookieValue, valid := h.hasValidCookieV2(r, ip); valid {
 		if h.cookieLimiter != nil && cookieValue != "" {
 			if !h.cookieLimiter.RecordAndCheck(cookieValue) {
@@ -169,8 +176,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// No valid cookie — check rate limit to determine challenge level
-	// If over soft threshold, serve harder challenge (PoW/Hold instead of transparent)
+	// No valid cookie, under rate limit — serve challenge based on escalation level
 	h.serveChallengeForLevel(w, r, ip)
 }
 
@@ -217,7 +223,10 @@ func (h *ProxyHandler) serveChallengeForLevel(w http.ResponseWriter, r *http.Req
 func (h *ProxyHandler) handleTransparentVerify(w http.ResponseWriter, r *http.Request, ip string) {
 	success := challenge.VerifyTransparent(w, r, h.challengeStore, ip, h.escalationEng)
 	if success {
-		// Set cookie BEFORE writing response (headers must be set before WriteHeader)
+		// Reset rate limiter so user can browse after solving challenge
+		if h.rateLimiter != nil {
+			h.rateLimiter.ResetIP(ip)
+		}
 		h.setAccessCookieV2(w, r, ip)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -231,6 +240,9 @@ func (h *ProxyHandler) handleTransparentVerify(w http.ResponseWriter, r *http.Re
 func (h *ProxyHandler) handleChallengeVerify(w http.ResponseWriter, r *http.Request, ip string) {
 	success := challenge.VerifyChallenge(w, r, h.challengeStore, ip)
 	if success {
+		if h.rateLimiter != nil {
+			h.rateLimiter.ResetIP(ip)
+		}
 		h.setAccessCookieV2(w, r, ip)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -244,7 +256,9 @@ func (h *ProxyHandler) handleChallengeVerify(w http.ResponseWriter, r *http.Requ
 func (h *ProxyHandler) handleHoldVerify(w http.ResponseWriter, r *http.Request, ip string) {
 	success := challenge.VerifyHold(w, r, h.challengeStore, ip)
 	if success {
-		// Set cookie BEFORE writing response (headers must be set before WriteHeader)
+		if h.rateLimiter != nil {
+			h.rateLimiter.ResetIP(ip)
+		}
 		h.setAccessCookieV2(w, r, ip)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
