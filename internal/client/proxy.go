@@ -430,17 +430,26 @@ func (h *ProxyHandler) hasValidCookie(r *http.Request, ip string) bool {
 }
 
 // isPassthroughPath returns true for paths that should bypass WAF challenge
-// and be proxied directly to the backend (master server endpoints).
-// These include: install script, API endpoints, docs, health check, admin panel.
+// and be proxied directly to the backend.
+// Only Kiro internal endpoints bypass — backend APIs are still protected by WAF.
 func isPassthroughPath(path string) bool {
 	switch {
 	case path == "/install" || path == "/install.sh":
 		return true
 	case path == "/healthz":
 		return true
-	case len(path) >= 5 && path[:5] == "/api/":
+	// Only Kiro master API endpoints bypass (heartbeat, download, register)
+	case len(path) >= 12 && path[:12] == "/api/v1/hear":
+		return true
+	case len(path) >= 16 && path[:16] == "/api/v1/download":
+		return true
+	case len(path) >= 16 && path[:16] == "/api/v1/register":
+		return true
+	case len(path) >= 14 && path[:14] == "/api/v1/update":
 		return true
 	case len(path) >= 6 && path[:6] == "/docs/":
+		return true
+	case path == "/docs":
 		return true
 	case len(path) >= 7 && path[:7] == "/admin/":
 		return true

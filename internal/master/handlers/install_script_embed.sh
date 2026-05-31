@@ -1089,6 +1089,10 @@ license_key: ${LICENSE_KEY}
 admin:
   allow_ips: []
 
+server:
+  interface: eth0
+  ssh_port: 22
+
 website:
   enabled: true
   cloudflare: true
