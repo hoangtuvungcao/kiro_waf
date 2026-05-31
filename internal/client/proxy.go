@@ -179,11 +179,15 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *ProxyHandler) serveChallengeForLevel(w http.ResponseWriter, r *http.Request, ip string) {
 	level := h.getEscalationLevel(ip)
 
+	// When rate limited (level >= 2 from volume), do NOT allow loop detector bypass
+	// This prevents attackers from getting cookies by triggering loop detection
+	rateLimited := h.rateLimiter != nil && !h.rateLimiter.Allow(ip)
+
 	switch level {
 	case 0:
 		h.reverseProxy.ServeHTTP(w, r)
 	case 1:
-		if h.shouldBypassLoop(ip, "transparent") {
+		if !rateLimited && h.shouldBypassLoop(ip, "transparent") {
 			h.setAccessCookieV2(w, r, ip)
 			h.reverseProxy.ServeHTTP(w, r)
 			return
@@ -191,7 +195,7 @@ func (h *ProxyHandler) serveChallengeForLevel(w http.ResponseWriter, r *http.Req
 		h.recordLoop(ip, "transparent")
 		challenge.ServeTransparentPage(w, r, h.challengeStore, h.transparentTTL, ip)
 	case 2:
-		if h.shouldBypassLoop(ip, "pow") {
+		if !rateLimited && h.shouldBypassLoop(ip, "pow") {
 			h.setAccessCookieV2(w, r, ip)
 			h.reverseProxy.ServeHTTP(w, r)
 			return
@@ -199,7 +203,7 @@ func (h *ProxyHandler) serveChallengeForLevel(w http.ResponseWriter, r *http.Req
 		h.recordLoop(ip, "pow")
 		challenge.ServeChallengePage(w, r, h.challengeStore, h.difficulty, h.challengeTTL, ip)
 	case 3:
-		if h.shouldBypassLoop(ip, "hold") {
+		if !rateLimited && h.shouldBypassLoop(ip, "hold") {
 			h.setAccessCookieV2(w, r, ip)
 			h.reverseProxy.ServeHTTP(w, r)
 			return
