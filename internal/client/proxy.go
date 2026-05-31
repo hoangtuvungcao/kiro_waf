@@ -368,6 +368,11 @@ func (h *ProxyHandler) getEscalationLevel(ip string) int {
 	escalationLevel := 0
 	if h.escalationEng != nil {
 		escalationLevel = h.escalationEng.GetLevel(ip)
+		// If challenge_all_new is disabled, don't challenge new visitors (level 1)
+		// Only challenge if escalation is due to actual failures (level >= 2)
+		if !h.challengeAll && escalationLevel == 1 {
+			escalationLevel = 0
+		}
 	} else if h.challengeAll {
 		escalationLevel = 1
 	}
