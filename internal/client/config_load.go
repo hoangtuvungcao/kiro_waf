@@ -261,6 +261,9 @@ func applyDefaults(cfg *clientConfig) {
 	if cfg.BlocklistFile == "" {
 		cfg.BlocklistFile = "/var/lib/kiro/xdp-blocklist.txt"
 	}
+	if cfg.XDPSyncCommand == "" {
+		cfg.XDPSyncCommand = "/usr/local/bin/kiro-xdp-sync"
+	}
 	if cfg.HeartbeatSeconds == 0 {
 		cfg.HeartbeatSeconds = 60
 	}
