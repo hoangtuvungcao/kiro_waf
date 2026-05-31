@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -67,24 +68,19 @@ type clientConfig struct {
 
 // Run is the entry point for the Client_WAF application.
 // Returns 0 on success, 1 on failure.
+// It delegates to RunWithConfig with the default config path.
 func Run() int {
-	cfg := loadConfig()
+	return RunWithConfig("/etc/kiro/kiro.yaml")
+}
 
-	// Fatal on missing required config
-	if strings.TrimSpace(cfg.LicenseKey) == "" {
-		log.Print("FATAL: KIRO_LICENSE_KEY is required but not set")
-		return 1
-	}
-	if strings.TrimSpace(cfg.CookieSecret) == "" {
-		log.Print("FATAL: KIRO_CLIENT_COOKIE_SECRET is required but not set")
-		return 1
-	}
-	if strings.TrimSpace(cfg.BackendURL) == "" {
-		log.Print("FATAL: KIRO_BACKEND_URL is required but not set")
-		return 1
-	}
-	if strings.TrimSpace(cfg.MasterURL) == "" {
-		log.Print("FATAL: KIRO_MASTER_URL is required but not set")
+// RunWithConfig is the entry point for the Client_WAF application using a specified config path.
+// It loads configuration from the given YAML file (with env var overrides and defaults),
+// validates it, and starts the WAF proxy.
+// Returns 0 on success, 1 on failure.
+func RunWithConfig(configPath string) int {
+	cfg, err := LoadClientConfig(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "FATAL: %v\n", err)
 		return 1
 	}
 
@@ -159,7 +155,6 @@ func Run() int {
 	// Plan enforcement: XDP startup is deferred until first heartbeat confirms plan allows it.
 	// This ensures the plan's xdp_enabled flag is respected before starting XDP components.
 	var xdpStartOnce sync.Once
-	xdpCommandConfigured := cfg.XDPSyncCommand != ""
 
 	// Start heartbeat loop with plan enforcement callback
 	heartbeatConfig := HeartbeatConfig{
@@ -177,10 +172,12 @@ func Run() int {
 					planCfg.RPMPerIP, planCfg.SubnetRPM)
 			}
 
-			// Enforce XDP: only start if BOTH env var is set AND plan allows it
+			// Enforce XDP: start if plan allows it and startup function is registered
+			// XDP components (GeoIP, botnet, config sync) use bpftool directly
+			// and don't need the sync command (only ban/engine.go's SyncToXDP needs it)
 			if !planCfg.XDPEnabled {
 				log.Printf("plan enforcement: XDP disabled by plan")
-			} else if xdpCommandConfigured && XDPStartupFunc != nil {
+			} else if XDPStartupFunc != nil {
 				xdpStartOnce.Do(func() {
 					log.Printf("plan enforcement: XDP enabled by plan, starting XDP components")
 					XDPStartupFunc(ctx, cfg.GeoIPCSVPath)
@@ -276,7 +273,7 @@ func Run() int {
 	}()
 
 	// XDP startup is now deferred to plan enforcement callback (OnPlanConfig).
-	// XDP will only start if: env var KIRO_XDP_SYNC_COMMAND is set AND plan says xdp_enabled=true.
+	// XDP will start if: plan says xdp_enabled=true AND XDPStartupFunc is registered.
 
 	// Register HTTP routes
 	mux := http.NewServeMux()

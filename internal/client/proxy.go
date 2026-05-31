@@ -136,7 +136,21 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.banEngine.IsBanned(ip) {
+	if h.banEngine != nil && h.banEngine.IsBanned(ip) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// ALWAYS record request for rate limiting (volume tracking)
+	if h.rateLimiter != nil {
+		h.rateLimiter.RecordRequest(ip)
+	}
+
+	// Check if IP hit hard block threshold → ban immediately
+	if h.rateLimiter != nil && h.rateLimiter.IsHardBlocked(ip) {
+		if h.banEngine != nil {
+			h.banEngine.Ban(ip, h.banDuration, "rate_limit_hard_block")
+		}
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -164,6 +178,7 @@ func (h *ProxyHandler) serveChallengeForLevel(w http.ResponseWriter, r *http.Req
 		h.reverseProxy.ServeHTTP(w, r)
 	case 1:
 		if h.shouldBypassLoop(ip, "transparent") {
+			h.setAccessCookieV2(w, r, ip)
 			h.reverseProxy.ServeHTTP(w, r)
 			return
 		}
@@ -171,6 +186,7 @@ func (h *ProxyHandler) serveChallengeForLevel(w http.ResponseWriter, r *http.Req
 		challenge.ServeTransparentPage(w, r, h.challengeStore, h.transparentTTL, ip)
 	case 2:
 		if h.shouldBypassLoop(ip, "pow") {
+			h.setAccessCookieV2(w, r, ip)
 			h.reverseProxy.ServeHTTP(w, r)
 			return
 		}
@@ -178,6 +194,7 @@ func (h *ProxyHandler) serveChallengeForLevel(w http.ResponseWriter, r *http.Req
 		challenge.ServeChallengePage(w, r, h.challengeStore, h.difficulty, h.challengeTTL, ip)
 	case 3:
 		if h.shouldBypassLoop(ip, "hold") {
+			h.setAccessCookieV2(w, r, ip)
 			h.reverseProxy.ServeHTTP(w, r)
 			return
 		}
@@ -204,18 +221,29 @@ func (h *ProxyHandler) handleTransparentVerify(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ProxyHandler) handleChallengeVerify(w http.ResponseWriter, r *http.Request, ip string) {
-	h.setAccessCookieV2(w, r, ip)
-	challenge.VerifyChallenge(w, r, h.challengeStore, ip)
-	if h.escalationEng != nil {
-		h.escalationEng.RecordSuccess(ip)
+	success := challenge.VerifyChallenge(w, r, h.challengeStore, ip)
+	if success {
+		h.setAccessCookieV2(w, r, ip)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		if h.escalationEng != nil {
+			h.escalationEng.RecordSuccess(ip)
+		}
 	}
 }
 
 func (h *ProxyHandler) handleHoldVerify(w http.ResponseWriter, r *http.Request, ip string) {
-	h.setAccessCookieV2(w, r, ip)
-	challenge.VerifyHold(w, r, h.challengeStore, ip)
-	if h.escalationEng != nil {
-		h.escalationEng.RecordSuccess(ip)
+	success := challenge.VerifyHold(w, r, h.challengeStore, ip)
+	if success {
+		// Set cookie BEFORE writing response (headers must be set before WriteHeader)
+		h.setAccessCookieV2(w, r, ip)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		if h.escalationEng != nil {
+			h.escalationEng.RecordSuccess(ip)
+		}
 	}
 }
 
@@ -314,24 +342,33 @@ func (h *ProxyHandler) extractTLSFingerprint(r *http.Request) string {
 }
 
 func (h *ProxyHandler) getEscalationLevel(ip string) int {
+	// Volume-based level from rate limiter
+	rateLimitLevel := 0
+	if h.rateLimiter != nil {
+		if h.rateLimiter.IsHardBlocked(ip) {
+			rateLimitLevel = 4
+		} else if !h.rateLimiter.Allow(ip) {
+			rateLimitLevel = 2 // PoW challenge for soft threshold
+			subnet := h.rateLimiter.GetSubnet24(ip)
+			if !h.rateLimiter.AllowSubnet(subnet) {
+				rateLimitLevel = 3 // Hold for subnet threshold
+			}
+		}
+	}
+
+	// Failure-based level from escalation engine
+	escalationLevel := 0
 	if h.escalationEng != nil {
-		return h.escalationEng.GetLevel(ip)
+		escalationLevel = h.escalationEng.GetLevel(ip)
+	} else if h.challengeAll {
+		escalationLevel = 1
 	}
-	h.rateLimiter.RecordRequest(ip)
-	if h.rateLimiter.IsHardBlocked(ip) {
-		return 4
+
+	// Use the higher of the two levels
+	if rateLimitLevel > escalationLevel {
+		return rateLimitLevel
 	}
-	if !h.rateLimiter.Allow(ip) {
-		return 3
-	}
-	subnet := h.rateLimiter.GetSubnet24(ip)
-	if !h.rateLimiter.AllowSubnet(subnet) {
-		return 2
-	}
-	if h.challengeAll {
-		return 1
-	}
-	return 0
+	return escalationLevel
 }
 
 func (h *ProxyHandler) shouldBypassLoop(ip string, challengeType string) bool {

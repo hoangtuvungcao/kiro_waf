@@ -48,3 +48,78 @@ telemetry:
   # Mặc định tắt gửi dữ liệu về provider. Khi cần bảo hành có thể bật health report.
   enabled: false
 
+
+# ─── WAF Client Runtime Settings ─────────────────────────────────────────────
+# Section dành cho kiro-client-waf. Bỏ comment các field cần tùy chỉnh.
+# Các field bắt buộc: cookie_secret, master_url (listen_addr có default).
+#
+# client:
+#   # (Bắt buộc) Secret 40 ký tự dùng cho HMAC cookie signing.
+#   # Tạo bằng: head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 40
+#   cookie_secret: "your-random-40-char-secret-here"
+#
+#   # (Bắt buộc) URL của Kiro master server.
+#   master_url: https://firewall.vpsgen.com
+#
+#   # Địa chỉ listen cho WAF reverse proxy. (default: ":8090")
+#   listen_addr: ":8090"
+#
+#   # Định danh node, dùng trong heartbeat và dashboard. (default: hostname)
+#   node_id: my-server
+#
+#   # Độ khó proof-of-work challenge. Số càng cao càng khó. (default: 4)
+#   pow_difficulty: 4
+#
+#   # Thời gian hiển thị hold page tính bằng giây. (default: 2)
+#   hold_seconds: 2
+#
+#   # Giới hạn request/phút cho mỗi IP. (default: từ protection.profile)
+#   rpm_per_ip: 120
+#
+#   # Giới hạn request/phút cho mỗi subnet /24. (default: từ protection.profile)
+#   subnet_rpm: 1800
+#
+#   # Số lần vi phạm rate-limit trước khi hard block. (default: từ protection.profile)
+#   hard_block_after: 360
+#
+#   # Thời gian block tính bằng giây. (default: 900)
+#   block_ttl_seconds: 900
+#
+#   # Đường dẫn file XDP blocklist. (default: /var/lib/kiro/xdp-blocklist.txt)
+#   blocklist_file: "/var/lib/kiro/xdp-blocklist.txt"
+#
+#   # Lệnh sync XDP blocklist sau khi cập nhật. (default: rỗng)
+#   xdp_sync_command: ""
+#
+#   # Khoảng thời gian heartbeat gửi về master, tính bằng giây. (default: 60)
+#   heartbeat_seconds: 60
+#
+#   # Khoảng thời gian kiểm tra cập nhật config, tính bằng giây. (default: 300)
+#   update_seconds: 300
+#
+#   # Challenge tất cả visitor mới (true/false). (default: false)
+#   challenge_all_new: false
+#
+#   # TTL của transparent JS challenge tính bằng giây. (default: 30)
+#   transparent_ttl: 30
+#
+#   # TTL ngắn cho cookie sau challenge thành công, tính bằng giây. (default: 300)
+#   cookie_short_ttl: 300
+#
+#   # Số lần vi phạm trước khi escalate challenge level. (default: 3)
+#   escalation_threshold: 3
+#
+#   # Thời gian cooldown sau escalation, tính bằng giây. (default: 600)
+#   escalation_cooldown: 600
+#
+#   # Giới hạn cookie request/IP. (default: 300)
+#   cookie_rate_limit: 300
+#
+#   # Chế độ trust Cloudflare: "strict" hoặc "permissive". (default: strict)
+#   cf_trust_mode: "strict"
+#
+#   # Danh sách mã quốc gia chặn qua XDP, phân cách bằng dấu phẩy. (default: rỗng)
+#   xdp_blocked_countries: ""
+#
+#   # Đường dẫn file GeoIP CSV database. (default: rỗng)
+#   geoip_csv_path: ""

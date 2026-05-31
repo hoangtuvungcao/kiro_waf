@@ -22,6 +22,7 @@ curl -fsSL https://firewall.vpsgen.com/install.sh | bash
 ```
 
 Script sẽ tự động gọi `POST /api/v1/register` trên master server để lấy license key miễn phí.
+Script tạo file cấu hình YAML tại `/etc/kiro/kiro.yaml` với các giá trị cần thiết (license key, cookie secret, master URL).
 
 Tính năng Community:
 - 1 domain
@@ -99,45 +100,69 @@ chmod +x /usr/local/bin/kiro-client-waf /usr/local/bin/kiro-cli
 ```bash
 mkdir -p /etc/kiro /var/lib/kiro /var/log/kiro
 
-cat > /etc/kiro/kiro-client.env << 'EOF'
-KIRO_CLIENT_LISTEN=:8090
-KIRO_BACKEND_URL=http://127.0.0.1:3000
-KIRO_MASTER_URL=https://firewall.vpsgen.com
-KIRO_LICENSE_KEY=YOUR-LICENSE-KEY
-KIRO_CLIENT_COOKIE_SECRET=CHANGE-ME-RANDOM-SECRET
-KIRO_NODE_ID=my-server
-KIRO_RPM_PER_IP=120
-KIRO_SUBNET_RPM=1800
-KIRO_HARD_BLOCK_AFTER=360
-KIRO_BLOCK_TTL_SECONDS=900
-KIRO_POW_DIFFICULTY=4
-KIRO_HOLD_SECONDS=2
-KIRO_HEARTBEAT_SECONDS=60
-KIRO_UPDATE_SECONDS=300
-KIRO_XDP_BLOCKLIST_FILE=/var/lib/kiro/xdp-blocklist.txt
+cat > /etc/kiro/kiro.yaml << 'EOF'
+# Kiro WAF - Cấu hình thống nhất
+mode: full
+license_key: YOUR-LICENSE-KEY
+
+admin:
+  allow_ips: []
+
+website:
+  enabled: true
+  cloudflare: true
+  tls_mode: flexible_http
+  sites:
+    - domains: []
+      backend: http://127.0.0.1:3000
+
+protection:
+  profile: balanced
+
+client:
+  cookie_secret: "CHANGE-ME-RANDOM-SECRET"
+  master_url: https://firewall.vpsgen.com
+  listen_addr: ":8090"
+  node_id: my-server
+  heartbeat_seconds: 30
+  challenge_all_new: true
+  cookie_short_ttl: 1800
 EOF
 
-chmod 600 /etc/kiro/kiro-client.env
+chmod 600 /etc/kiro/kiro.yaml
 ```
+
+> **Lưu ý:** File `/etc/kiro/kiro.yaml` là cấu hình chính cho cả `kiro-client-waf` và `kiro-cli`. Environment variables vẫn được hỗ trợ và sẽ override giá trị YAML nếu được set (xem `docs/configuration.md` để biết chi tiết).
 
 ### Bước 4: Cài đặt systemd service
 
 ```bash
 cat > /etc/systemd/system/kiro-client-waf.service << 'EOF'
 [Unit]
-Description=Kiro Client WAF - Reverse proxy, challenge pages, rate limiting, and XDP sync
+Description=Kiro WAF Client - Bảo vệ máy chủ web
 Documentation=https://firewall.vpsgen.com
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/kiro-client-waf
-EnvironmentFile=/etc/kiro/kiro-client.env
-Restart=on-failure
+ExecStart=/usr/local/bin/kiro-client-waf --config /etc/kiro/kiro.yaml
+WorkingDirectory=/var/lib/kiro
+Restart=always
 RestartSec=5
 LimitNOFILE=65535
-WorkingDirectory=/var/lib/kiro
+LimitMEMLOCK=infinity
+
+# Bảo mật
+NoNewPrivileges=false
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/log/kiro /var/lib/kiro
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kiro-client-waf
 
 [Install]
 WantedBy=multi-user.target
@@ -153,17 +178,14 @@ systemctl enable --now kiro-client-waf
 # Kiểm tra trạng thái service
 systemctl status kiro-client-waf
 
+# Xem log realtime
+journalctl -u kiro-client-waf -f
+
 # Kiểm tra health endpoint
-curl -s http://127.0.0.1:8090/healthz
+curl -s http://127.0.0.1:80/healthz
 
-# Kiểm tra trạng thái (cần config YAML)
-kiro-cli status --config /etc/kiro/kiro.yaml
-
-# Kiểm tra health
-kiro-cli health --config /etc/kiro/kiro.yaml
-
-# Preflight check
-kiro-cli preflight --config /etc/kiro/kiro.yaml
+# Kiểm tra trạng thái (cần config YAML — tùy chọn)
+# kiro-cli status --config /etc/kiro/kiro.yaml
 ```
 
 ## Post-Installation

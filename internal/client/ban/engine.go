@@ -86,16 +86,25 @@ func (e *InMemoryBanEngine) Ban(ip string, duration time.Duration, reason string
 	e.appendToBlocklist(ip)
 
 	// Trigger XDP sync
-	_ = e.SyncToXDP()
+	if err := e.SyncToXDP(); err != nil {
+		fmt.Fprintf(os.Stderr, "ban: SyncToXDP failed for ip=%s reason=%s: %v\n", ip, reason, err)
+	}
 }
 
-// Unban xóa IP khỏi ban store.
-// Lưu ý: KHÔNG xóa IP khỏi blocklist file ngay lập tức.
-// IP sẽ được gỡ khỏi XDP blocklist ở lần sync tiếp theo khi file được rebuild.
+// Unban xóa IP khỏi ban store và rebuild blocklist file.
+// Đồng thời trigger XDP sync để cập nhật kernel maps.
 func (e *InMemoryBanEngine) Unban(ip string) {
 	e.mu.Lock()
 	delete(e.store, ip)
+
+	// Rebuild blocklist file while still holding the write lock
+	e.rebuildBlocklist()
 	e.mu.Unlock()
+
+	// Sync to XDP after releasing the lock
+	if err := e.SyncToXDP(); err != nil {
+		fmt.Fprintf(os.Stderr, "ban: SyncToXDP failed after Unban ip=%s: %v\n", ip, err)
+	}
 }
 
 // SyncToXDP thực thi sync command để đồng bộ blocklist file đến XDP kernel maps.
@@ -136,15 +145,24 @@ func (e *InMemoryBanEngine) SyncToXDP() error {
 
 // CleanupExpired xóa tất cả các ban entries đã hết hạn khỏi store.
 // Nên được gọi định kỳ để giải phóng bộ nhớ.
+// Sau khi xóa, rebuild blocklist file và sync đến XDP.
 func (e *InMemoryBanEngine) CleanupExpired() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	now := e.nowFunc()
 	for ip, entry := range e.store {
 		if now.After(entry.ExpiresAt) {
 			delete(e.store, ip)
 		}
+	}
+
+	// Rebuild blocklist file while still holding the write lock
+	e.rebuildBlocklist()
+	e.mu.Unlock()
+
+	// Sync to XDP after releasing the lock
+	if err := e.SyncToXDP(); err != nil {
+		fmt.Fprintf(os.Stderr, "ban: SyncToXDP failed after CleanupExpired: %v\n", err)
 	}
 }
 
@@ -180,6 +198,41 @@ func (e *InMemoryBanEngine) BannedCount() int {
 		}
 	}
 	return count
+}
+
+// rebuildBlocklist truncates and rewrites the blocklist file with all currently-banned
+// (non-expired) IPs in IP/32 format. Must be called while holding the write lock
+// (caller ensures lock is held). Graceful degradation: logs errors but doesn't crash.
+// If blocklistPath is empty, returns immediately (no-op).
+func (e *InMemoryBanEngine) rebuildBlocklist() {
+	if e.blocklistPath == "" {
+		return
+	}
+
+	now := e.nowFunc()
+
+	// Collect all non-expired IPs
+	var lines []string
+	for _, entry := range e.store {
+		if !now.After(entry.ExpiresAt) {
+			lines = append(lines, entry.IP+"/32\n")
+		}
+	}
+
+	// Truncate and rewrite the file
+	f, err := os.OpenFile(e.blocklistPath, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ban: cannot open blocklist file for rebuild %s: %v\n", e.blocklistPath, err)
+		return
+	}
+	defer f.Close()
+
+	for _, line := range lines {
+		if _, err := f.WriteString(line); err != nil {
+			fmt.Fprintf(os.Stderr, "ban: cannot write to blocklist file during rebuild %s: %v\n", e.blocklistPath, err)
+			return
+		}
+	}
 }
 
 // appendToBlocklist ghi IP/32 vào cuối blocklist file.

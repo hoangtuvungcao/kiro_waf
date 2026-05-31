@@ -1,0 +1,44 @@
+# Kiro WAF - VPS 198 (103.77.246.198)
+# Master + Client WAF
+# Generated: 2025
+
+mode: full
+plan: school_smb
+license_key: KIRO-XXXX-XXXX  # <-- Thay bằng license key thật
+
+admin:
+  allow_ips:
+    - 103.77.246.153/32  # VPS 153
+    # Thêm IP admin của bạn ở đây
+
+server:
+  interface: eth0
+  ssh_port: 22
+
+website:
+  enabled: true
+  cloudflare: true
+  tls_mode: flexible_http
+  sites:
+    - domains: []  # <-- Thêm domain
+      backend: http://127.0.0.1:3000  # <-- Backend URL thật
+
+protection:
+  profile: balanced  # light, balanced, strict, lockdown
+
+client:
+  cookie_secret: ""  # <-- Sẽ được generate tự động bởi install script
+  master_url: https://103.77.246.198  # Master chạy trên chính VPS này
+  listen_addr: ":8090"
+  node_id: vps-198
+  pow_difficulty: 4
+  hold_seconds: 2
+  heartbeat_seconds: 30
+  update_seconds: 300
+  challenge_all_new: false
+  block_ttl_seconds: 900
+  transparent_ttl: 30
+  cookie_short_ttl: 300
+  escalation_threshold: 3
+  escalation_cooldown: 600
+  cf_trust_mode: strict

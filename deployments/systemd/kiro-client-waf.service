@@ -6,8 +6,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/kiro-client-waf
-EnvironmentFile=/etc/kiro/client-waf.env
+ExecStart=/usr/local/bin/kiro-client-waf --config /etc/kiro/kiro.yaml
 WorkingDirectory=/var/lib/kiro
 
 # Restart policy
@@ -16,9 +15,9 @@ RestartSec=5
 StartLimitIntervalSec=300
 StartLimitBurst=5
 
-# User and group
-User=kiro
-Group=kiro
+# User and group (uncomment if 'kiro' user exists on the system)
+# User=kiro
+# Group=kiro
 
 # Security hardening
 NoNewPrivileges=true

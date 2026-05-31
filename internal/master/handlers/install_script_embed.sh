@@ -37,6 +37,7 @@ XDP_DIR="/usr/lib/kiro/xdp"
 XDP_FILE="${XDP_DIR}/xdp_filter.o"
 CONFIG_DIR="/etc/kiro"
 ENV_FILE="${CONFIG_DIR}/kiro-client.env"
+YAML_FILE="${CONFIG_DIR}/kiro.yaml"
 SERVICE_NAME="kiro-client-waf"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
@@ -978,7 +979,8 @@ EOF
 
 # --- Bước 8: Tạo thư mục cấu hình ---
 # Preserves existing config files on re-run (idempotency).
-# Only creates new config if ENV_FILE does not exist.
+# Generates /etc/kiro/kiro.yaml (unified YAML config).
+# If legacy .env file exists but no YAML, logs migration warning.
 create_config() {
     log_info "Đang kiểm tra cấu hình..."
 
@@ -986,13 +988,20 @@ create_config() {
     mkdir -p /var/log/kiro
     mkdir -p /var/lib/kiro
 
-    # Preserve existing config files — do not overwrite on re-run
-    if [[ -f "$ENV_FILE" ]]; then
-        log_success "File cấu hình đã tồn tại tại ${ENV_FILE}. Giữ nguyên cấu hình hiện có."
+    # Check for existing YAML config first — preserve on re-run
+    if [[ -f "$YAML_FILE" ]]; then
+        log_success "File cấu hình YAML đã tồn tại tại ${YAML_FILE}. Giữ nguyên."
         return 0
     fi
 
-    log_info "Đang tạo cấu hình mới..."
+    # Check for legacy .env file — warn and recommend migration
+    if [[ -f "$ENV_FILE" ]]; then
+        log_warn "Phát hiện cấu hình legacy tại ${ENV_FILE}."
+        log_warn "kiro-client-waf vẫn hỗ trợ env vars. Khuyến nghị migrate sang YAML."
+        return 0
+    fi
+
+    log_info "Đang tạo cấu hình YAML mới..."
 
     # Sử dụng backend URL từ flag hoặc hỏi interactive
     local backend_url="${BACKEND_URL:-}"
@@ -1018,51 +1027,39 @@ create_config() {
         fi
     fi
 
-    # Ghi file environment mới
-    # Generate random cookie secret
+    # Generate random cookie secret (40 chars from /dev/urandom | base64)
     local cookie_secret
     cookie_secret=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 40)
 
-    cat > "$ENV_FILE" << EOF
-# Kiro WAF Client - Cấu hình
+    cat > "$YAML_FILE" << EOF
+# Kiro WAF - Cấu hình thống nhất
 # Được tạo bởi install-client.sh vào $(date '+%Y-%m-%d %H:%M:%S')
 
-# License key xác thực với master server
-KIRO_LICENSE_KEY=${LICENSE_KEY}
+mode: full
+license_key: ${LICENSE_KEY}
 
-# Cookie secret cho HMAC-SHA256 (tự động sinh, KHÔNG chia sẻ)
-KIRO_CLIENT_COOKIE_SECRET=${cookie_secret}
+admin:
+  allow_ips: []
 
-# URL master server
-KIRO_MASTER_URL=${MASTER_URL}
+website:
+  enabled: true
+  cloudflare: true
+  tls_mode: flexible_http
+  sites:
+    - domains: []
+      backend: ${backend_url}
 
-# URL backend cần bảo vệ
-KIRO_BACKEND_URL=${backend_url}
+protection:
+  profile: balanced
 
-# Cổng lắng nghe (mặc định: 80)
-KIRO_CLIENT_LISTEN=:80
-
-# Node ID
-KIRO_NODE_ID=$(hostname)
-
-# Heartbeat interval (giây)
-KIRO_HEARTBEAT_SECONDS=30
-
-# Challenge tất cả visitor mới
-KIRO_CHALLENGE_ALL_NEW=true
-
-# Cookie TTL (giây, mặc định: 1800 = 30 phút)
-KIRO_COOKIE_SHORT_TTL=1800
-
-# Đường dẫn XDP object
-KIRO_XDP_PATH=${XDP_FILE}
-
-# Log level: debug, info, warn, error
-KIRO_LOG_LEVEL=info
+client:
+  cookie_secret: "${cookie_secret}"
+  master_url: ${MASTER_URL}
+  listen_addr: ":8090"
 EOF
 
-    chmod 600 "$ENV_FILE"
-    log_success "Đã tạo cấu hình tại ${ENV_FILE}"
+    chmod 600 "$YAML_FILE"
+    log_success "Đã tạo cấu hình YAML tại ${YAML_FILE}"
 }
 
 # --- Bước 9: Kích hoạt và khởi động service ---
