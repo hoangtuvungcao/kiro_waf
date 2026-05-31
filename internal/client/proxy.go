@@ -122,9 +122,25 @@ func NewProxyHandler(
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ip := h.extractClientIP(r)
 
-	// Bypass WAF for internal kiro endpoints that must be publicly accessible
-	// without challenge (install script, health check, API endpoints)
+	// Bypass WAF for static assets and health check only
 	if isPassthroughPath(r.URL.Path) {
+		h.reverseProxy.ServeHTTP(w, r)
+		return
+	}
+
+	// Machine API calls with license key header bypass challenge (but still rate limited)
+	// This allows heartbeat, download, register endpoints to work without browser
+	if r.Header.Get("X-License-Key") != "" || r.Header.Get("X-Api-Key") != "" {
+		if h.rateLimiter != nil {
+			h.rateLimiter.RecordRequest(ip)
+		}
+		if h.rateLimiter != nil && h.rateLimiter.IsHardBlocked(ip) {
+			if h.banEngine != nil {
+				h.banEngine.Ban(ip, h.banDuration, "api_hard_block")
+			}
+			http.Error(w, `{"error":"rate limited"}`, http.StatusTooManyRequests)
+			return
+		}
 		h.reverseProxy.ServeHTTP(w, r)
 		return
 	}
@@ -429,33 +445,15 @@ func (h *ProxyHandler) hasValidCookie(r *http.Request, ip string) bool {
 	return valid
 }
 
-// isPassthroughPath returns true for paths that should bypass WAF challenge
-// and be proxied directly to the backend.
-// Only Kiro internal endpoints bypass — backend APIs are still protected by WAF.
+// isPassthroughPath returns true for paths that should bypass WAF challenge.
+// Only static assets and health check bypass — everything else is protected.
 func isPassthroughPath(path string) bool {
 	switch {
-	case path == "/install" || path == "/install.sh":
-		return true
 	case path == "/healthz":
 		return true
-	// Only Kiro master API endpoints bypass (heartbeat, download, register)
-	case len(path) >= 12 && path[:12] == "/api/v1/hear":
-		return true
-	case len(path) >= 16 && path[:16] == "/api/v1/download":
-		return true
-	case len(path) >= 16 && path[:16] == "/api/v1/register":
-		return true
-	case len(path) >= 14 && path[:14] == "/api/v1/update":
-		return true
-	case len(path) >= 6 && path[:6] == "/docs/":
-		return true
-	case path == "/docs":
-		return true
-	case len(path) >= 7 && path[:7] == "/admin/":
-		return true
-	case path == "/admin":
-		return true
 	case len(path) >= 8 && path[:8] == "/static/":
+		return true
+	case path == "/install" || path == "/install.sh":
 		return true
 	}
 	return false
