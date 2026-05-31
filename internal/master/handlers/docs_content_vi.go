@@ -121,8 +121,9 @@ var viInstallation template.HTML = `<h2>Hướng Dẫn Cài Đặt</h2>
 </ol>
 
 <h3>Sau Khi Cài Đặt</h3>
-<p>Sau khi cài đặt, cấu hình website trong <code>/etc/kiro/kiro-client.env</code> và khởi động lại service:</p>
-<pre><code>sudo systemctl restart kiro-client-waf
+<p>Cấu hình website trong <code>/etc/kiro/kiro.yaml</code> (file đã được tạo tự động) và khởi động lại service:</p>
+<pre><code>sudo nano /etc/kiro/kiro.yaml    # Chỉnh domain và backend URL
+sudo systemctl restart kiro-client-waf
 sudo systemctl status kiro-client-waf</code></pre>
 
 <h3>Cập Nhật</h3>

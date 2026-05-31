@@ -70,7 +70,7 @@ func runLicense(args []string) {
 
 func runStatus(args []string) {
 	cmd := flag.NewFlagSet("kiro-cli status", flag.ExitOnError)
-	configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+	configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 	if err := cmd.Parse(args); err != nil {
 		os.Exit(2)
 	}
@@ -80,7 +80,7 @@ func runStatus(args []string) {
 
 func runHealth(args []string) {
 	cmd := flag.NewFlagSet("kiro-cli health", flag.ExitOnError)
-	configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+	configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 	osRelease := cmd.String("os-release", "/etc/os-release", "path to os-release for preflight")
 	writableRoot := cmd.String("preflight-writable-root", "", "optional writable root for state-dir preflight")
 	skipCommands := cmd.Bool("skip-command-checks", false, "skip nft/nginx/systemctl PATH checks")
@@ -99,7 +99,7 @@ func runHealth(args []string) {
 
 func runPreflight(args []string) {
 	cmd := flag.NewFlagSet("kiro-cli preflight", flag.ExitOnError)
-	configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+	configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 	osRelease := cmd.String("os-release", "/etc/os-release", "path to os-release for preflight")
 	writableRoot := cmd.String("preflight-writable-root", "", "optional writable root for state-dir preflight")
 	skipCommands := cmd.Bool("skip-command-checks", false, "skip nft/nginx/systemctl PATH checks")
@@ -122,7 +122,7 @@ func runMode(args []string) {
 	switch args[0] {
 	case "show":
 		cmd := flag.NewFlagSet("kiro-cli mode show", flag.ExitOnError)
-		configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+		configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 		if err := cmd.Parse(args[1:]); err != nil {
 			os.Exit(2)
 		}
@@ -134,7 +134,7 @@ func runMode(args []string) {
 		fmt.Println(mode)
 	case "set":
 		cmd := flag.NewFlagSet("kiro-cli mode set", flag.ExitOnError)
-		configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+		configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 		mode := cmd.String("mode", "", "mode to set: server or full")
 		if err := cmd.Parse(args[1:]); err != nil {
 			os.Exit(2)
@@ -156,7 +156,7 @@ func runInstall(args []string) {
 	switch args[0] {
 	case "plan":
 		cmd := flag.NewFlagSet("kiro-cli install plan", flag.ExitOnError)
-		configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+		configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 		installRoot := cmd.String("install-root", "", "optional lab/staging root prefix")
 		agentBinary := cmd.String("agent-binary", "", "source kiro-agent binary to install")
 		cliBinary := cmd.String("cli-binary", "", "source kiro-cli binary to install")
@@ -181,7 +181,7 @@ func runInstall(args []string) {
 		writeJSON(plan)
 	case "stage-lab":
 		cmd := flag.NewFlagSet("kiro-cli install stage-lab", flag.ExitOnError)
-		configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+		configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 		installRoot := cmd.String("install-root", "", "required lab/staging root prefix")
 		agentBinary := cmd.String("agent-binary", "", "source kiro-agent binary to install")
 		cliBinary := cmd.String("cli-binary", "", "source kiro-cli binary to install")
@@ -206,7 +206,7 @@ func runInstall(args []string) {
 		writeJSON(result)
 	case "apply-lab":
 		cmd := flag.NewFlagSet("kiro-cli install apply-lab", flag.ExitOnError)
-		configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+		configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 		installRoot := cmd.String("install-root", "", "optional lab/staging root prefix; empty applies to real root")
 		agentBinary := cmd.String("agent-binary", "", "source kiro-agent binary to install")
 		cliBinary := cmd.String("cli-binary", "", "source kiro-cli binary to install")
@@ -241,7 +241,7 @@ func runInstall(args []string) {
 		writeJSON(result)
 	case "uninstall-plan":
 		cmd := flag.NewFlagSet("kiro-cli install uninstall-plan", flag.ExitOnError)
-		configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+		configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 		installRoot := cmd.String("install-root", "", "optional lab/staging root prefix")
 		purge := cmd.Bool("purge", false, "include destructive config/state/log removal steps")
 		if err := cmd.Parse(args[1:]); err != nil {
@@ -259,7 +259,7 @@ func runInstall(args []string) {
 		writeJSON(plan)
 	case "uninstall-apply-lab":
 		cmd := flag.NewFlagSet("kiro-cli install uninstall-apply-lab", flag.ExitOnError)
-		configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+		configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 		installRoot := cmd.String("install-root", "", "optional lab/staging root prefix; empty applies to real root")
 		purge := cmd.Bool("purge", false, "include destructive config/state/log removal steps")
 		ack := cmd.String("ack", "", "required value: KIRO_LAB_UNINSTALL_APPLY")
@@ -297,7 +297,7 @@ func runIncident(args []string) {
 	switch args[0] {
 	case "report":
 		cmd := flag.NewFlagSet("kiro-cli incident report", flag.ExitOnError)
-		configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+		configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 		outputDir := cmd.String("output-dir", "", "incident report output directory")
 		incidentID := cmd.String("incident-id", "", "optional incident id")
 		incidentType := cmd.String("type", "other", "incident type: attack, lost_ssh, update_failed, origin_ip_leaked, license_rebind, runtime_security, other")
@@ -349,7 +349,7 @@ func runPilot(args []string) {
 	switch args[0] {
 	case "report":
 		cmd := flag.NewFlagSet("kiro-cli pilot report", flag.ExitOnError)
-		configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+		configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 		outputDir := cmd.String("output-dir", "", "pilot report output directory")
 		pilotID := cmd.String("pilot-id", "", "optional pilot id")
 		serverCount := cmd.Int("server-count", 0, "number of pilot VPS/servers")
@@ -505,7 +505,7 @@ func runUpdate(args []string) {
 
 func runReport(args []string) {
 	cmd := flag.NewFlagSet("kiro-cli report", flag.ExitOnError)
-	configPath := cmd.String("config", "configs/kiro.example.yaml", "path to kiro config")
+	configPath := cmd.String("config", "/etc/kiro/kiro.yaml", "path to YAML config (default: /etc/kiro/kiro.yaml)")
 	if err := cmd.Parse(args); err != nil {
 		os.Exit(2)
 	}
